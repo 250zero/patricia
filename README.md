@@ -37,29 +37,27 @@ El sistema cuenta con **4 usuarios precargados** para cubrir la matriz completa 
 
 ## 🎯 3. Características Principales del Producto
 
-1. **Captura Fotográfica Mobile-First e IA Multimodal:**
-   - Ingesta de recibos y facturas físicas desde la cámara del teléfono o subida de archivos (PNG, JPG, WebP).
-   - Extracción de datos en tiempo real mediante **Google Gemini Flash**: Nombre del emisor, RNC/Cédula, NCF/e-CF, Fecha, Subtotal, ITBIS (18%), Total, desglose de líneas de detalle y clasificación automática del gasto.
-2. **Validación Fiscal DGII Estricta:**
+1. **Registro e Inicio de Sesión con Supabase Auth (`RF-01`):**
+   - Pantalla dual de **Iniciar Sesión** y **Crear Cuenta** conectada a Supabase Auth, más botones de acceso rápido para pruebas multi-rol.
+2. **Captura Fotográfica Mobile-First, Compresión en Cliente e IA Multimodal (`RF-05` a `RF-17`):**
+   - Captura desde cámara trasera del teléfono o galería, previsualización y **compresión automática en el cliente mediante `<canvas>`** (máximo `1600 px` por lado en JPEG `< 1.5 MB`) con barra de progreso real e historial de reducción.
+   - Extracción en tiempo real mediante **Google Gemini Flash** (cascada de modelos multimodales): Nombre del emisor, RNC/Cédula, NCF/e-CF, Fecha, **Categoría sugerida editable** (`alimentos`, `combustible`, `transporte`, `oficina`, `servicios`, `otros`), Subtotal, ITBIS (18%), Total y desglose de líneas de detalle (`receipt_items`).
+   - Detección automática de **posibles duplicados** (mismo comercio, fecha y total), comprobantes borrosos e imágenes que no son recibos (`confidence_score`).
+3. **Validación Fiscal DGII Estricta:**
    - Algoritmo de verificación de **RNC por Módulo 11** ponderado.
-   - Detección y tipado de formatos oficiales DGII: **Facturas de Crédito Fiscal (`B01`)**, Comprobantes Gubernamentales (`B15`), Gastos Menores (`B13`) y comprobantes electrónicos **e-CF (`E31`)**.
-   - Cuadre aritmético contable automatizado: `Subtotal + ITBIS (18%) == Total` con tolerancia de redondeo de `±0.05 DOP`.
-3. **Bandeja de Revisión Contable y Visor Fotográfico:**
-   - Bandeja exclusiva para el Contador con filtros por estado (`Pendiente`, `Aprobado`, `Rechazado`), búsqueda de proveedores y rangos de fecha.
-   - Visor de imagen integrado con **zoom incremental (1x a 3x)** y **rotación continua a 90°** para auditoría visual cómoda de comprobantes rotados o arrugados.
-4. **Segregación de Funciones (SoD / Cuatro Ojos) con Doble Candado:**
-   - Ningún usuario (incluyendo contadores o administradores) puede aprobar un comprobante que él mismo haya registrado.
+   - Clasificación entre **Recibo Informal** (omite RNC/NCF opcionales) y **Factura Fiscal** (`B01`, `B13`, `B15`, `E31`), más cuadre aritmético reactivo (`Subtotal + ITBIS == Total`, tolerancia `±0.05 DOP`).
+4. **Historial de Gastos, Resumen Mensual y Edición/Eliminación (`RF-21` a `RF-25`):**
+   - Tarjeta de **Resumen Mensual por Categoría** con barras de distribución porcentual, miniaturas ampliables con zoom, buscador combinable por comercio/RNC/NCF/categoría/estado/fechas, y edición o eliminación de borradores (limpiando el objeto físico en Supabase Storage).
+5. **Bandeja de Revisión Contable y Visor Fotográfico con URLs Firmadas (`RF-03`, `CS-01`):**
+   - Bandeja exclusiva para el Contador con filtros combinables (`Pendiente`, `Aprobado`, `Rechazado`, categoría, fechas y búsqueda).
+   - Visor con **URLs firmadas directas de Supabase Storage**, **zoom incremental** y **rotación de 90°**, más bloqueo de botones y `textarea` en modo solo lectura una vez emitido el dictamen.
+6. **Segregación de Funciones (SoD / Cuatro Ojos) con Doble Candado:**
+   - Ningún usuario (incluyendo contadores) puede aprobar un comprobante que él mismo haya registrado.
    - Doble blindaje: Validación a nivel de aplicación en el servicio Deno (`403 Forbidden`) y a nivel relacional con trigger nativo en PostgreSQL (`trg_check_sod_review`).
-5. **Comunicación Bidireccional de Observaciones:**
-   - El contador puede ingresar comentarios o motivos de rechazo en cada comprobante.
-   - Los empleados visualizan dichos comentarios directamente en su historial de gastos sin fricción.
-6. **Exportación Financiera Compatible con Microsoft Excel:**
-   - Generación de reportes tabulares en formato CSV con el prefijo obligatorio **UTF-8 BOM (`\uFEFF`)**, evitando problemas de codificación de caracteres en español (acentos, 'ñ', símbolos monetarios).
-7. **PWA Instalable y Funcionamiento Offline-First:**
-   - Service Worker seguro (`sw.js`) y `manifest.webmanifest` con iconos en múltiples densidades (192px, 512px, maskable).
-   - Caché local mediante IndexedDB con banner reactivo de pérdida y recuperación de conectividad.
-8. **Bitácora de Auditoría Super Admin:**
-   - Panel en tiempo real de trazabilidad que registra método HTTP, ruta, estatus, usuario ejecutor, dirección IP real almacenada en tipo nativo `inet` de PostgreSQL y marca de tiempo.
+7. **Comunicación Bidireccional y Exportación CSV Compatible con Excel (`RF-26`):**
+   - Comentarios contables sincronizados en la vista de Gastos del empleado y descarga autenticada de reportes CSV filtrados con prefijo **UTF-8 BOM (`\uFEFF`)**.
+8. **PWA Instalable, Offline-First y Bitácora Super Admin:**
+   - Service Worker (`sw.js`), `manifest.webmanifest`, caché local en IndexedDB con banner de red, y bitácora en tiempo real para Super Admin con IP nativa `inet`.
 
 ---
 
@@ -252,20 +250,26 @@ Todos los endpoints de negocio operan bajo el prefijo `/api/v1/`:
 
 | Método | Endpoint | Protección | Descripción |
 | :--- | :--- | :---: | :--- |
-| `GET` | `/api/v1/health` | Pública | Estado de salud del servicio, timestamp y versión. |
-| `POST` | `/api/v1/auth/login` | Pública | Login con credenciales; emite JWT con roles y permisos. |
+| `GET` | `/api/v1/health` | Pública | Estado de salud del servicio, conexión PostgreSQL y timestamp. |
+| `POST` | `/api/v1/auth/register` | Pública | Registro de nuevo usuario en Supabase Auth con rol inicial Empleado (`1`). |
+| `POST` | `/api/v1/auth/login` | Pública | Login con credenciales; emite JWT (Supabase / WebCrypto) con roles y permisos. |
 | `GET` | `/api/v1/auth/me` | Bearer Token | Retorna el perfil del usuario autenticado y sus permisos activos. |
-| `POST` | `/api/v1/auth/logout` | Bearer Token | Revocación y cierre de sesión. |
-| `POST` | `/api/v1/receipts/extract` | Bearer Token | Procesa fotografía mediante Gemini Flash y devuelve datos estructurados. |
-| `POST` | `/api/v1/receipts` | Bearer Token | Guarda un comprobante y sus líneas de detalle en la base de datos. |
-| `GET` | `/api/v1/receipts` | Bearer Token | Lista comprobantes del usuario con filtros por estado y fecha. |
-| `GET` | `/api/v1/receipts/:id` | Bearer Token | Ficha detallada de un comprobante con líneas, imagen y comentarios. |
-| `POST` | `/api/v1/receipts/:id/comments` | Bearer Token | Añade un comentario contable u observación al comprobante. |
-| `GET` | `/api/v1/accounting/inbox` | Rol Contador | Bandeja de revisión contable de comprobantes enviados por empleados. |
-| `POST` | `/api/v1/accounting/review` | Rol Contador | Dictamina comprobante (Aprobar/Rechazar) validando el candado SoD. |
-| `GET` | `/api/v1/accounting/export/csv` | Rol Contador | Exporta reporte consolidado en CSV con codificación UTF-8 BOM. |
+| `POST` | `/api/v1/auth/switch-role` | Bearer Token | Cambia el rol activo del usuario entre sus roles asignados. |
+| `POST` | `/api/v1/receipts/process-image` | Bearer Token | Sube la foto comprimida a Supabase Storage, invoca Gemini Flash OCR, sugiere categoría y alerta posibles duplicados. |
+| `POST` | `/api/v1/receipts` | Bearer Token | Guarda un comprobante con su categoría y líneas de detalle en PostgreSQL. |
+| `GET` | `/api/v1/receipts` | Bearer Token | Lista comprobantes con filtros combinables (`status`, `document_type`, `category`, `search`, `from_date`, `to_date`) y URLs firmadas. |
+| `GET` | `/api/v1/receipts/:id` | Bearer Token | Ficha detallada de un comprobante con líneas, URL firmada (`image_url`) y comentarios. |
+| `PUT` | `/api/v1/receipts/:id` | Bearer Token | Actualiza datos de un comprobante en estado Borrador (`status = 1`). |
+| `DELETE` | `/api/v1/receipts/:id` | Bearer Token | Elimina un borrador y remueve su archivo físico de Supabase Storage / disco. |
+| `POST` | `/api/v1/receipts/:id/submit` | Bearer Token | Envía un borrador a la bandeja de Contabilidad (`status = 2`). |
+| `GET` | `/api/v1/receipts/:id/image` | Bearer Token | Redirige (`302`) a la URL firmada de Supabase Storage o sirve el binario local. |
+| `GET` | `/api/v1/accounting/inbox` | Rol Contador / Admin | Bandeja de revisión contable con filtros combinables y URLs firmadas. |
+| `POST` | `/api/v1/accounting/:id/review` | Rol Contador / Admin | Dictamina comprobante (`approve`/`reject`) validando el candado SoD Cuatro Ojos. |
+| `POST` | `/api/v1/accounting/:id/comments` | Rol Contador / Admin | Añade un comentario contable u observación sincronizada a Gastos. |
+| `GET` | `/api/v1/accounting/export` | Rol Contador / Admin | Exporta el rango y filtros seleccionados a CSV con codificación UTF-8 BOM. |
 | `GET` | `/api/v1/users` | Rol Super Admin | Lista completa de colaboradores y roles asignados. |
-| `GET` | `/api/v1/audit-logs` | Rol Super Admin | Bitácora en tiempo real con IP real `inet`, método, ruta y usuario. |
+| `PATCH` | `/api/v1/users/:id/role` | Rol Super Admin | Actualiza el rol primario asignado a un usuario. |
+| `GET` | `/api/v1/users/audit-logs` | Rol Super Admin | Bitácora en tiempo real con IP real `inet`, método, ruta y usuario. |
 
 ---
 
@@ -306,25 +310,49 @@ curl -s http://127.0.0.1:3002/api/v1/health
 
 ---
 
-## 🔮 9. Roadmap de Producto y Futuros Features
+## 🔮 9. Roadmap de Producto y Futuros Features (Pendientes Identificados)
 
-Para las próximas versiones de la plataforma Patricia se proyectan las siguientes extensiones funcionales de alto valor empresarial:
-1. **Integración Nativa con Servicios Web de Facturación Electrónica DGII (e-CF):** Conexión directa mediante certificados digitales X.509 para consulta de TrackID y estatus de aprobación de comprobantes fiscales emitidos.
-2. **Notificaciones Push Multicanal (Web Push / WhatsApp Business):** Alertas inmediatas a empleados cuando un comprobante es observado o rechazado por el contador, y recordatorios preventivos de cierre contable mensual.
-3. **OCR Multi-Página y Procesamiento Asíncrono de PDFs:** Pipeline con workers de fondo para desglose y conciliación de facturas corporativas multi-página, órdenes de compra y estados de cuenta en PDF.
-4. **Sincronización Bidireccional con ERPs (SAP, Odoo, Dynamics 365, QuickBooks):** Exportación automatizada de pólizas y asientos de diario contable mediante webhooks transaccionales y conectores REST/GraphQL.
-5. **Geolocalización y Detección Automática de Viáticos:** Registro automático de coordenadas GPS durante la captura fotográfica para cotejar gastos de transporte, dietas y combustible contra políticas de kilometraje corporativo.
-6. **Presupuestos y Alertas de Desviación por Centro de Costos:** Asignación de techos presupuestarios por departamento o proyecto con alertas preventivas al alcanzar el 80% del límite mensual.
+### Pendientes Funcionales del Alcance (Backlog Priorizado):
+1. **Soporte Multi-Imagen y PDF Multipágina por Gasto (`RF-09`):** Permitir adjuntar 2 o más fotografías por un mismo comprobante extenso mediante una tabla relacional `receipt_attachments` vinculada a Supabase Storage.
+2. **Agente Conversacional para Consultas sobre Gastos (`RF-27`):** Asistente en lenguaje natural (*"¿Cuánto gasté en combustible este mes?"*) respaldado por tool-calling SQL seguro sobre PostgreSQL.
+3. **Cola de Captura Offline con Sincronización Automática (`RF-31`):** Almacenamiento de fotografías en `IndexedDB` cuando el usuario no tiene señal móvil y subida diferida automática vía *Background Sync API* al recuperar conexión.
+4. **Extracción Explícita de Propina Legal (10%) y Método de Pago (`RF-11` granular):** Desglose separado de propina legal y medio de pago (`Efectivo`, `Tarjeta`, `Transferencia`) dentro del formulario de revisión y la exportación contable.
+
+### Evolución Corporativa de Producto:
+5. **Integración Nativa con Servicios Web de Facturación Electrónica DGII (e-CF):** Conexión directa mediante certificados digitales X.509 para consulta de TrackID y estatus de aprobación de comprobantes fiscales emitidos.
+6. **Notificaciones Push Multicanal (Web Push / WhatsApp Business):** Alertas inmediatas a empleados cuando un comprobante es observado o rechazado por el contador, y recordatorios preventivos de cierre contable mensual.
+7. **Sincronización Bidireccional con ERPs (SAP, Odoo, Dynamics 365, QuickBooks):** Exportación automatizada de pólizas y asientos de diario contable mediante webhooks transaccionales y conectores REST/GraphQL.
+8. **Geolocalización y Presupuestos por Centro de Costos:** Registro opcional de coordenadas GPS en viáticos/combustible y techos presupuestarios por departamento con alertas preventivas al 80 %.
 
 ---
 
-## ⚡ 10. Mejoras Posibles y Optimizaciones de Arquitectura
+## ⚡ 10. Mejoras Posibles, Auditoría de Seguridad y Optimizaciones de Arquitectura
 
+### 🛡️ Hallazgos de la Auditoría de Seguridad y Puntos de Mejora (Hardening):
+Como resultado de la revisión de seguridad estática sobre el backend Deno, la configuración de Supabase y el cliente Angular PWA, se identificaron los siguientes puntos de endurecimiento prioritario para paso a operación bancaria/corporativa estricta:
+
+1. **SEC-P01 — Eliminación de Credenciales de Contingencia y Hash Fuerte de Contraseñas:**
+   - *Hallazgo actual:* El fallback relacional en `backend/src/routes/auth.route.ts` acepta claves sembradas demo (`"Patricia2026!"` / `"password123"`) y utiliza un `JWT_SECRET` con valor por defecto de respaldo en `backend/src/services/auth.service.ts`.
+   - *Mejora obligatoria:* En producción estricta, deshabilitar cualquier fallback local de contraseña plana una vez validado Supabase Auth, exigir verificación criptográfica con **Argon2id/bcrypt** y validar al arranque (`fail-fast`) la existencia de un `JWT_SECRET` de al menos 256 bits.
+2. **SEC-P02 — Rate Limiting y Control de Cuotas / Costos de IA (`RF-35`):**
+   - *Hallazgo actual:* No existe un limitador de peticiones por usuario o IP ante llamadas repetitivas al endpoint `/api/v1/auth/login` (fuerza bruta) ni en `/api/v1/receipts/process-image` (consumo excesivo de cuota Gemini).
+   - *Mejora obligatoria:* Incorporar middleware de Rate Limiting distribuido (ej. ventana deslizante en Redis o tabla de cuotas por usuario en Postgres) limitando intentos de login por IP y procesamientos OCR diarios por usuario.
+3. **SEC-P03 — Endurecimiento de Bucket Privado y Separación de `SUPABASE_SERVICE_ROLE_KEY` (`RF-03`):**
+   - *Hallazgo actual:* En `.env` de entorno, `SUPABASE_SERVICE_ROLE_KEY` comparte el valor de clave pública (`sb_publishable_...`), lo que obligó a habilitar políticas amplias en `storage.objects` (`bucket_id = 'receipts'`) y `public = true` en el bucket.
+   - *Mejora obligatoria:* Configurar la llave privada `service_role` exclusivamente en el servidor Deno, devolver el bucket `receipts` a `public = false` y restringir las políticas RLS de `storage.objects` al propietario por ruta `(storage.foldername(name))[1] = auth.uid()::text` o roles Contador/Admin, sirviendo imágenes únicamente mediante `createSignedUrl` de vida corta.
+4. **SEC-P04 — Protección contra XSS/CSRF y Cabeceras de Seguridad HTTP:**
+   - *Hallazgo actual:* El frontend almacena el token JWT y perfil en `localStorage` (`patricia_auth_token`). Un posible ataque XSS podría leerlo.
+   - *Mejora obligatoria:* Migrar la sesión hacia cookies `HttpOnly; Secure; SameSite=Strict` emitidas por el BFF Deno e inyectar cabeceras `Content-Security-Policy (CSP)`, `Strict-Transport-Security (HSTS)` y `X-Frame-Options: DENY` en Nginx/Hono.
+5. **SEC-P05 — Validación Estricta de Orígenes CORS y Longitud en Bitácora de Auditoría:**
+   - *Hallazgo actual:* `backend/main.ts` valida CORS mediante `origin.includes("vis7ar.com")` (lo cual aceptaría un subdominio malicioso que contenga esa cadena como substring); además, rutas largas superaron ocasionalmente `receipt_audit_logs.action VARCHAR(50)` (`SQLSTATE 22001`).
+   - *Mejora obligatoria:* Reemplazar la verificación de subcadena por un `Set` exacto de orígenes permitidos o regex anclado (`/^https:\/\/([a-z0-9-]+\.)?vis7ar\.com$/`), y ampliar `receipt_audit_logs.action` a `VARCHAR(150)`.
+
+### ⚙️ Optimizaciones de Arquitectura y Escalabilidad:
 1. **Caché Distribuido de Alto Rendimiento (Redis / Dragonfly):** Almacenamiento en memoria de catálogos contables, tasas de cambio oficiales del Banco Central (BCRD) y validaciones frecuentes de RNC para reducir la latencia de lectura en PostgreSQL.
-2. **Cola de Mensajería Transaccional con Workers (RabbitMQ / PostgreSQL LISTEN/NOTIFY):** Desacoplar la ingestión pesada y preprocesamiento de imágenes hacia workers dedicados con reintentos exponenciales y Dead Letter Queues (DLQ).
-3. **Preprocesamiento de Imágenes en el Edge (WebAssembly / Sharp en Navegador):** Compresión inteligente, auto-rotación por orientación EXIF y binarización adaptativa directamente en el dispositivo móvil antes de la transferencia HTTP, reduciendo drásticamente el consumo de datos celulares.
-4. **Detección de Gastos Duplicados y Fraude con Embeddings (`pgvector`):** Vectores de similitud perceptual e informacional para detectar automáticamente recibos fotografiados más de una vez por distintos colaboradores o proveedores duplicados.
-5. **Auditoría Avanzada con Trazabilidad Inmutable (WORM):** Sellado criptográfico periódico de `receipt_audit_logs` con hash encadenado SHA-256 hacia almacenamiento inmutable para cumplimiento normativo internacional (SOX / NIIF).
+2. **Cola de Mensajería Transaccional con Workers (PostgreSQL LISTEN/NOTIFY o RabbitMQ):** Desacoplar el procesamiento pesado hacia workers dedicados con reintentos exponenciales y Dead Letter Queues (DLQ).
+3. **Auto-rotación EXIF y Binarización Adaptativa en WebAssembly:** Enderezar automáticamente fotos tomadas en vertical/horizontal mediante lectura de cabeceras EXIF en el navegador antes del envío.
+4. **Detección Perceptual Avanzada con Embeddings (`pgvector`):** Complementar la detección actual `(comercio, fecha, total)` con embeddings visuales para detectar comprobantes fotografiados dos veces desde distinto ángulo.
+5. **Auditoría Inmutable (WORM):** Sellado criptográfico periódico de `receipt_audit_logs` con hash encadenado SHA-256 para cumplimiento normativo corporativo (SOX / NIIF).
 
 ---
 
