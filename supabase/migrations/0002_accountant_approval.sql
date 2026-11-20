@@ -2,6 +2,17 @@
 -- Patricia Migration 0002_accountant_approval.sql — SoD Cuatro Ojos y RLS
 -- =====================================================================
 
+-- Compatibilidad universal: Crea schema auth y funcion uid() si no existen
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS UUID AS $$
+BEGIN
+    RETURN NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
+EXCEPTION WHEN OTHERS THEN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
 -- Habilitar RLS en tablas transaccionales
 ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receipt_items ENABLE ROW LEVEL SECURITY;
