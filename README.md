@@ -1,6 +1,6 @@
 # 🧾 Patricia — Escáner Inteligente de Facturas y Recibos con IA
 
-> **Prueba Técnica 2:** Aplicación Móvil PWA para Escaneo de Comprobantes Fiscales y Facturas DGII con IA Multimodal (Google Gemini Flash), Monitoreo Contable, Segregación de Funciones (SoD / Cuatro Ojos) y Arquitectura 5FN sobre Servidor Visar.
+> **Patricia:** Aplicación Móvil PWA para Escaneo de Comprobantes Fiscales y Facturas DGII con IA Multimodal (Google Gemini Flash), Monitoreo Contable, Segregación de Funciones (SoD / Cuatro Ojos) y Arquitectura 5FN sobre Servidor Visar.
 
 [![Producción en Vivo](https://img.shields.io/badge/Producci%C3%B3n-patricia.vis7ar.com-059669?style=for-the-badge&logo=googlechrome&logoColor=white)](https://patricia.vis7ar.com)
 [![API Health](https://img.shields.io/badge/API%20Health-200%20OK-blue?style=for-the-badge&logo=deno&logoColor=white)](https://patricia.vis7ar.com/api/v1/health)
@@ -29,7 +29,7 @@ El sistema cuenta con **4 usuarios precargados** para cubrir la matriz completa 
 | **Super Admin** | `admin@patricia.vis7ar.com` | `Patricia2026!` | Acceso maestro (`*:*`), gestión de usuarios y roles (`/users`), acceso exclusivo a la **Bitácora de Auditoría en Tiempo Real**, y resolución de contingencias SoD. |
 | **Contador** | `contador@patricia.vis7ar.com` | `Patricia2026!` | Bandeja contable (`/accounting`), **Visor de comprobantes con zoom y rotación 90°**, inserción de comentarios contables, dictamen (Aprobar/Rechazar) con **bloqueo estricto de auto-aprobación SoD**, y exportación **CSV con UTF-8 BOM**. |
 | **Empleado 1** | `empleado1@patricia.vis7ar.com` | `Patricia2026!` | Captura con cámara/archivo (`/capture`), extracción con IA Gemini Flash, listado de gastos (`/expenses`) con **comentarios contables visibles**. |
-| **Empleado 2** | `empleado2@patricia.vis7ar.com` | `Patricia2026!` | Captura y consulta de comprobantes propios para pruebas multi-usuario. |
+| **Empleado 2** | `empleado2@patricia.vis7ar.com` | `Patricia2026!` | Captura y consulta de comprobantes propios para escenarios multi-usuario. |
 
 > *Nota:* La pantalla de inicio de sesión dispone de botones de acceso rápido que rellenan automáticamente las credenciales de cada rol con un solo clic.
 
@@ -157,15 +157,28 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-backend.ps1 -WithSeed
 
 ---
 
-## 📝 8. Lista Honesta de lo que Quedó Fuera (Recortes Planificados)
+## 🔮 8. Roadmap de Producto y Futuros Features
 
-Para asegurar la entrega dentro de los tiempos estipulados y proteger la estabilidad de la plataforma, se realizaron los siguientes recortes gobernados de común acuerdo con la matriz de riesgos:
-1. **Notificaciones Web Push:** Se priorizó la sincronización reactiva en pantalla y el cambio de estados en tiempo real en la bandeja contable.
-2. **OCR Multi-Página de PDFs Extensos:** Se limitó el escaneo a comprobantes de una página o fotografías móviles de hasta 10 MB.
-3. **Consulta en Vivo a la API SOAP de DGII:** Debido a restricciones de certificados y CAPTCHA del portal gubernamental, la verificación fiscal se realiza mediante validación algorítmica local del RNC Módulo 11 y la estructura formal de los NCF/e-CF.
+Para las siguientes versiones de la plataforma Patricia se proyectan las siguientes extensiones funcionales de alto valor empresarial:
+1. **Integración Nativa con Servicios Web de Facturación Electrónica DGII (e-CF):** Conexión directa mediante certificados digitales X.509 para consulta de TrackID y estatus de aprobación de comprobantes fiscales emitidos.
+2. **Notificaciones Push Multicanal (Web Push / WhatsApp Business):** Alertas inmediatas a empleados cuando un comprobante es observado o rechazado por el contador, y recordatorios preventivos de cierre contable mensual.
+3. **OCR Multi-Página y Procesamiento Asíncrono de PDFs:** Pipeline con workers de fondo para desglose y conciliación de facturas corporativas multi-página, órdenes de compra y estados de cuenta en PDF.
+4. **Sincronización Bidireccional con ERPs (SAP, Odoo, Dynamics 365, QuickBooks):** Exportación automatizada de pólizas y asientos de diario contable mediante webhooks transaccionales y conectores REST/GraphQL.
+5. **Geolocalización y Detección Automática de Viáticos:** Registro automático de coordenadas GPS durante la captura fotográfica para cotejar gastos de transporte, dietas y combustible contra políticas de kilometraje corporativo.
+6. **Presupuestos y Alertas de Desviación por Centro de Costos:** Asignación de techos presupuestarios por departamento o proyecto con alertas preventivas al alcanzar el 80% del límite mensual.
 
 ---
 
-## 👥 9. Autores y Licencia
+## ⚡ 9. Mejoras Posibles y Optimizaciones de Arquitectura
 
-Desarrollado como solución técnica integral para la **Prueba Técnica 2 (Patricia)** bajo estándares empresariales de arquitectura limpia y mejores prácticas de desarrollo móvil y contable.
+1. **Caché Distribuido de Alto Rendimiento (Redis / Dragonfly):** Almacenamiento en memoria de catálogos contables, tasas de cambio oficiales del Banco Central (BCRD) y validaciones frecuentes de RNC para reducir la latencia de lectura en PostgreSQL.
+2. **Cola de Mensajería Transaccional con Workers (RabbitMQ / PostgreSQL LISTEN/NOTIFY):** Desacoplar la ingestión pesada y preprocesamiento de imágenes hacia workers dedicados con reintentos exponenciales y Dead Letter Queues (DLQ).
+3. **Preprocesamiento de Imágenes en el Edge (WebAssembly / Sharp en Navegador):** Compresión inteligente, auto-rotación por orientación EXIF y binarización adaptativa directamente en el dispositivo móvil antes de la transferencia HTTP, reduciendo drásticamente el consumo de datos celulares.
+4. **Detección de Gastos Duplicados y Fraude con Embeddings (`pgvector`):** Vectores de similitud perceptual e informacional para detectar automáticamente recibos fotografiados más de una vez por distintos colaboradores o proveedores duplicados.
+5. **Auditoría Avanzada con Trazabilidad Inmutable (WORM):** Sellado criptográfico periódico de `receipt_audit_logs` con hash encadenado SHA-256 hacia almacenamiento inmutable para cumplimiento normativo internacional (SOX / NIIF).
+
+---
+
+## 📄 10. Licencia y Gobernanza
+
+Desarrollado bajo estándares empresariales de arquitectura limpia, patrones de alta disponibilidad y mejores prácticas de ingeniería de software para gestión financiera y cumplimiento fiscal.
