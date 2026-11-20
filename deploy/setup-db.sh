@@ -3,14 +3,21 @@ set -e
 
 echo "=== Configurando y Migrando Base de Datos PostgreSQL para Patricia en Visar ==="
 
-sudo -u postgres psql << 'EOF'
+DB_PASSWORD="${SUPABASE_DB_PASSWORD:-}"
+if [ -z "$DB_PASSWORD" ]; then
+   read -s -p "Ingrese la contraseña para patricia_user: " DB_PASSWORD
+   echo
+fi
+
+sudo -u postgres psql -v dbpass="$DB_PASSWORD" << 'EOF'
 DO $$
 BEGIN
    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'patricia_user') THEN
-      CREATE ROLE patricia_user WITH LOGIN PASSWORD 'PatriciaSecure2026!';
+      CREATE ROLE patricia_user WITH LOGIN;
    END IF;
 END
 $$;
+ALTER ROLE patricia_user WITH PASSWORD :'dbpass';
 
 SELECT 'CREATE DATABASE patricia_db OWNER patricia_user'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'patricia_db')\gexec

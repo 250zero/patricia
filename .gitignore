@@ -20,4 +20,14 @@ pwa/.angular/
 Thumbs.db
 *.tmp
 *.log
+
+# Temporary test folders & receipts
 temp_receipt_samples/
+temp_ai_battery/
+
+# Sensitive scripts & SSH keys
+scripts/setup_visar_ssh.py
+*.pem
+*.key
+*.pub
+id_*
