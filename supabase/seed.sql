@@ -60,3 +60,72 @@ INSERT INTO user_roles (user_id, role_id, is_primary) VALUES
     ('00000000-0000-0000-0000-000000000003', 1, true), -- Empleado 1
     ('00000000-0000-0000-0000-000000000004', 1, true)  -- Empleado 2
 ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- 6. Comprobantes Demo Iniciales (Idempotente)
+-- Gasto 1: Factura Fiscal Aprobada con comentario contable
+INSERT INTO receipts (
+    id, user_id, document_type, merchant_name, rnc, ncf, currency_code, issue_date,
+    subtotal, itbis, total, status, reviewer_id, reviewed_at
+) VALUES (
+    'd0000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000003', -- Empleado 1
+    2, -- Factura Fiscal
+    'Supermercado Nacional',
+    '101012345',
+    'B0100001234',
+    'DOP',
+    CURRENT_DATE - INTERVAL '2 days',
+    1000.00,
+    180.00,
+    1180.00,
+    3, -- Aprobado
+    '00000000-0000-0000-0000-000000000002', -- Contador
+    NOW() - INTERVAL '1 day'
+) ON CONFLICT (id) DO NOTHING;
+
+-- Comentario contable para Gasto 1
+INSERT INTO receipt_comments (id, receipt_id, user_id, comment, is_accounting_note) VALUES (
+    'e0000000-0000-0000-0000-000000000001',
+    'd0000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000002',
+    'Factura válida con NCF B0100001234 e ITBIS 18% conciliado conforme a DGII.',
+    true
+) ON CONFLICT (id) DO NOTHING;
+
+-- Gasto 2: Factura Fiscal Enviada a Contabilidad (Pendiente de Dictamen)
+INSERT INTO receipts (
+    id, user_id, document_type, merchant_name, rnc, ncf, currency_code, issue_date,
+    subtotal, itbis, total, status
+) VALUES (
+    'd0000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003', -- Empleado 1
+    2, -- Factura Fiscal
+    'Estación Shell Tiradentes',
+    '101556789',
+    'B0100009988',
+    'DOP',
+    CURRENT_DATE - INTERVAL '1 day',
+    2000.00,
+    360.00,
+    2360.00,
+    2 -- Enviado
+) ON CONFLICT (id) DO NOTHING;
+
+-- Gasto 3: Recibo Informal Pendiente en Bandeja
+INSERT INTO receipts (
+    id, user_id, document_type, merchant_name, rnc, ncf, currency_code, issue_date,
+    subtotal, itbis, total, status
+) VALUES (
+    'd0000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000004', -- Empleado 2
+    1, -- Recibo
+    'Café Santo Domingo',
+    NULL,
+    NULL,
+    'DOP',
+    CURRENT_DATE,
+    320.00,
+    0.00,
+    320.00,
+    2 -- Enviado
+) ON CONFLICT (id) DO NOTHING;
