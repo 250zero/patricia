@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#10b981" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Fondo redondeado para PWA maskable -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+
+  <!-- Borde decorativo -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="#10b981" stroke-width="4" stroke-opacity="0.25" />
+
+  <!-- Silueta de Factura / Recibo Fiscal -->
+  <g filter="url(#shadow)">
+    <!-- Cuerpo del recibo -->
+    <path d="M140 100 C140 88 150 78 162 78 L350 78 C362 78 372 88 372 100 L372 400 L340 380 L310 400 L280 380 L256 400 L232 380 L202 400 L172 380 L140 400 Z" fill="#1e293b" stroke="#334155" stroke-width="6" />
+
+    <!-- Encabezado de Factura Fiscal / DGII -->
+    <rect x="175" y="120" width="162" height="24" rx="6" fill="url(#primaryGrad)" />
+    
+    <!-- Lineas simuladas de items y RNC -->
+    <line x1="175" y1="175" x2="270" y2="175" stroke="#94a3b8" stroke-width="8" stroke-linecap="round" />
+    <line x1="290" y1="175" x2="337" y2="175" stroke="#10b981" stroke-width="8" stroke-linecap="round" />
+
+    <line x1="175" y1="210" x2="250" y2="210" stroke="#64748b" stroke-width="6" stroke-linecap="round" />
+    <line x1="295" y1="210" x2="337" y2="210" stroke="#64748b" stroke-width="6" stroke-linecap="round" />
+
+    <line x1="175" y1="245" x2="260" y2="245" stroke="#64748b" stroke-width="6" stroke-linecap="round" />
+    <line x1="295" y1="245" x2="337" y2="245" stroke="#64748b" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Linea divisoria punteada -->
+    <line x1="175" y1="285" x2="337" y2="285" stroke="#475569" stroke-width="4" stroke-dasharray="8 6" />
+
+    <!-- Total destacado -->
+    <line x1="175" y1="325" x2="240" y2="325" stroke="#cbd5e1" stroke-width="10" stroke-linecap="round" />
+    <line x1="270" y1="325" x2="337" y2="325" stroke="#34d399" stroke-width="12" stroke-linecap="round" />
+  </g>
+
+  <!-- Lente / Camara Escaner Flotante -->
+  <circle cx="360" cy="360" r="76" fill="#0f172a" stroke="#10b981" stroke-width="8" filter="url(#shadow)" />
+  <circle cx="360" cy="360" r="54" fill="#042f2e" />
+  <!-- Rayo / Flash IA -->
+  <path d="M365 325 L340 365 L360 365 L352 395 L382 355 L362 355 Z" fill="url(#primaryGrad)" />
+</svg>

@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { NetworkStatusService } from '../../core/services/network-status.service';
+import { OfflineCacheService } from '../../core/services/offline-cache.service';
 import { AppIconComponent } from '../../shared/components/app-icon/app-icon.component';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { ModalComponent } from '../../shared/components/modal/modal.component';
@@ -256,6 +258,8 @@ import type { Receipt } from '../../core/models/receipt.model';
 })
 export class ExpensesComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly network = inject(NetworkStatusService);
+  private readonly offlineCache = inject(OfflineCacheService);
 
   readonly receipts = signal<Receipt[]>([]);
   readonly loading = signal(true);
@@ -270,12 +274,30 @@ export class ExpensesComponent implements OnInit {
 
   loadReceipts(): void {
     this.loading.set(true);
+
+    if (!this.network.isOnline()) {
+      this.offlineCache.getReceipts().then((cached) => {
+        if (cached && cached.length > 0) {
+          this.receipts.set(cached as unknown as Receipt[]);
+        }
+        this.loading.set(false);
+      });
+      return;
+    }
+
     this.api.get<{ receipts: Receipt[] }>('receipts').subscribe({
       next: (res) => {
         this.receipts.set(res.receipts);
+        this.offlineCache.saveReceipts(res.receipts);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: async () => {
+        const cached = await this.offlineCache.getReceipts();
+        if (cached && cached.length > 0) {
+          this.receipts.set(cached as unknown as Receipt[]);
+        }
+        this.loading.set(false);
+      },
     });
   }
 

@@ -1,5 +1,6 @@
 export type DocumentType = 1 | 2; // 1 = Recibo, 2 = Factura
 export type ReceiptStatus = 1 | 2 | 3 | 4; // 1 = Borrador, 2 = Enviado, 3 = Aprobado, 4 = Rechazado
+export type ReceiptListItem = Receipt;
 
 export interface ReceiptItem {
   id?: string;

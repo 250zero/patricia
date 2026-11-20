@@ -90,3 +90,36 @@ usersRouter.patch("/:id/role", async (c: Context) => {
     return c.json({ error: "Error al actualizar rol." }, 500);
   }
 });
+
+// GET /api/v1/users/audit-logs — Bitácora de auditoría inmutable
+usersRouter.get("/audit-logs", async (c: Context) => {
+  try {
+    const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
+    const offset = Number(c.req.query("offset")) || 0;
+    const actorId = c.req.query("actor_id");
+
+    const logs = await sql`
+      SELECT 
+        l.id,
+        l.entity_type,
+        l.entity_id,
+        l.action,
+        l.client_ip::text as client_ip,
+        l.user_agent,
+        l.changes,
+        l.created_at,
+        u.email as actor_email,
+        u.full_name as actor_name
+      FROM receipt_audit_logs l
+      LEFT JOIN users u ON l.actor_id = u.id
+      ${actorId ? sql`WHERE l.actor_id = ${actorId}` : sql``}
+      ORDER BY l.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    return c.json({ logs });
+  } catch (err: unknown) {
+    console.error("Error al consultar bitácora de auditoría:", err);
+    return c.json({ error: "Error al cargar auditoría." }, 500);
+  }
+});

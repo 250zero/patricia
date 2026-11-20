@@ -5,11 +5,24 @@
   <title>Patricia — Escáner de Recibos y Facturas con IA</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0A0F1D">
+  <meta name="theme-color" content="#059669">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Patricia: Escáner inteligente de facturas y recibos con validación fiscal RD, ITBIS 18% y revisión contable SoD.">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body class="bg-[#0A0F1D] text-[#F8FAFC]">
   <app-root></app-root>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('PWA Service Worker registration skipped:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

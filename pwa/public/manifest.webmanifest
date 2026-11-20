@@ -1,16 +1,32 @@
 {
   "name": "Patricia — Escáner de Facturas y Recibos",
   "short_name": "Patricia",
+  "description": "Escáner móvil inteligente de comprobantes fiscales, recibos y facturas DGII con IA multimodal y Segregación de Funciones.",
   "theme_color": "#059669",
   "background_color": "#0A0F1D",
   "display": "standalone",
+  "orientation": "portrait",
   "scope": "/",
   "start_url": "/",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
-  ]
+  ],
+  "categories": ["finance", "business", "productivity"],
+  "lang": "es-DO"
 }

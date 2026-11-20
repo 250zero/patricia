@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../core/services/auth.service';
+import { NetworkStatusService } from '../core/services/network-status.service';
 import { RoleSwitcherComponent } from './role-switcher.component';
 import { AppIconComponent } from '../shared/components/app-icon/app-icon.component';
 
@@ -37,6 +38,14 @@ import { AppIconComponent } from '../shared/components/app-icon/app-icon.compone
           </div>
         </div>
       </header>
+
+      <!-- Offline Indicator Banner -->
+      @if (!network.isOnline()) {
+        <div class="bg-amber-500/20 border-b border-amber-500/30 text-amber-300 px-4 py-2 text-xs flex items-center justify-center gap-2 sticky top-[57px] z-30 backdrop-blur-sm">
+          <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span class="font-medium">Modo sin conexión — mostrando datos locales almacenados</span>
+        </div>
+      }
 
       <!-- Main Content Area -->
       <main class="flex-1 max-w-2xl w-full mx-auto p-4 pb-24">
@@ -96,4 +105,5 @@ import { AppIconComponent } from '../shared/components/app-icon/app-icon.compone
 })
 export class LayoutComponent {
   protected readonly auth = inject(AuthService);
+  protected readonly network = inject(NetworkStatusService);
 }
