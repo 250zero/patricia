@@ -1,0 +1,16 @@
+{
+  "name": "Patricia — Escáner de Facturas y Recibos",
+  "short_name": "Patricia",
+  "theme_color": "#059669",
+  "background_color": "#0A0F1D",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

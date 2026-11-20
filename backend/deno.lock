@@ -1,0 +1,25 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@hono/hono@^4.6.14": "4.13.19",
+    "jsr:@std/dotenv@~0.225.3": "0.225.8"
+  },
+  "jsr": {
+    "@hono/hono@4.13.19": {
+      "integrity": "48cf710caf2fbd59e09bb9268400ed6949a4bd8e39e9afb8060111283442c9b3"
+    },
+    "@std/dotenv@0.225.8": {
+      "integrity": "27b8c1a9d00cbf938345a5924487c04d9b27bdd7e7bd1983f54bcf76d0a0174a"
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@hono/hono@^4.6.14",
+      "jsr:@std/dotenv@~0.225.3",
+      "npm:@google/generative-ai@0.24",
+      "npm:@supabase/supabase-js@^2.48.1",
+      "npm:postgres@^3.4.5",
+      "npm:zod@^3.24.1"
+    ]
+  }
+}

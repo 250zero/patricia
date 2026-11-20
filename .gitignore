@@ -1,0 +1,19 @@
+# Environment & Secrets
+.env
+*.env.local
+
+# Node & Package Managers
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build Outputs
+dist/
+out-tsc/
+.angular/
+
+# System & OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
