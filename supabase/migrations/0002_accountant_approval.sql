@@ -2,16 +2,25 @@
 -- Patricia Migration 0002_accountant_approval.sql — SoD Cuatro Ojos y RLS
 -- =====================================================================
 
--- Compatibilidad universal: Crea schema auth y funcion uid() si no existen
-CREATE SCHEMA IF NOT EXISTS auth;
-CREATE OR REPLACE FUNCTION auth.uid()
-RETURNS UUID AS $$
+-- Compatibilidad universal: Crea schema auth y funcion uid() solo si no existen
+DO $$
 BEGIN
-    RETURN NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
-EXCEPTION WHEN OTHERS THEN
-    RETURN NULL;
+    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'auth') THEN
+        EXECUTE 'CREATE SCHEMA auth';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'auth' AND p.proname = 'uid') THEN
+        EXECUTE $fn$
+            CREATE FUNCTION auth.uid() RETURNS UUID AS $body$
+            BEGIN
+                RETURN NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
+            EXCEPTION WHEN OTHERS THEN
+                RETURN NULL;
+            END;
+            $body$ LANGUAGE plpgsql STABLE;
+        $fn$;
+    END IF;
 END;
-$$ LANGUAGE plpgsql STABLE;
+$$;
 
 -- Habilitar RLS en tablas transaccionales (el backend como servicio de aplicacion gobierna con BYPASSRLS)
 ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
@@ -29,6 +38,7 @@ $$;
 
 -- 1. Politicas para Receipts
 -- Los usuarios regulares ven sus propios recibos; Contadores y Super Admins ven todos
+DROP POLICY IF EXISTS receipts_select_policy ON receipts;
 CREATE POLICY receipts_select_policy ON receipts
     FOR SELECT
     USING (
@@ -39,10 +49,12 @@ CREATE POLICY receipts_select_policy ON receipts
         )
     );
 
+DROP POLICY IF EXISTS receipts_insert_policy ON receipts;
 CREATE POLICY receipts_insert_policy ON receipts
     FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS receipts_update_policy ON receipts;
 CREATE POLICY receipts_update_policy ON receipts
     FOR UPDATE
     USING (

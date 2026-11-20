@@ -1,10 +1,13 @@
 import { sql } from "../config/db.ts";
+import { supabaseAdmin, supabase } from "../config/supabase.ts";
+import { ENV } from "../config/env.ts";
 import type { ExtractedReceiptData } from "./gemini.service.ts";
 import type { UserSession } from "./auth.service.ts";
 
 const UPLOADS_DIR = Deno.env.get("UPLOADS_DIR") || "./uploads/receipts";
+const STORAGE_BUCKET = "receipts";
 
-// Asegurar carpeta de almacenamiento de comprobantes
+// Asegurar carpeta de almacenamiento local de respaldo
 export async function ensureUploadsDir() {
   try {
     await Deno.mkdir(UPLOADS_DIR, { recursive: true });
@@ -13,21 +16,81 @@ export async function ensureUploadsDir() {
   }
 }
 
-export async function saveReceiptImage(fileBytes: Uint8Array, extension = "jpg"): Promise<string> {
-  await ensureUploadsDir();
+/**
+ * Guarda la imagen en Supabase Storage (bucket privado 'receipts') con fallback a disco local
+ */
+export async function saveReceiptImage(fileBytes: Uint8Array, extension = "jpg", userId?: string): Promise<string> {
   const filename = `${crypto.randomUUID()}.${extension}`;
+  const storagePath = userId ? `${userId}/${filename}` : filename;
+
+  // Si Supabase está configurado, subir al bucket 'receipts'
+  if (ENV.SUPABASE_URL && !ENV.SUPABASE_URL.includes("placeholder")) {
+    try {
+      const mimeType = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : extension === "pdf" ? "application/pdf" : "image/jpeg";
+      const { data, error } = await supabaseAdmin.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, fileBytes, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (!error && data?.path) {
+        return `supabase://${STORAGE_BUCKET}/${data.path}`;
+      }
+      console.warn("⚠️ Error subiendo a Supabase Storage, recurriendo a disco local:", error?.message);
+    } catch (err) {
+      console.warn("⚠️ Excepción en Supabase Storage, usando disco local:", err);
+    }
+  }
+
+  // Fallback a almacenamiento local en disco
+  await ensureUploadsDir();
   const filePath = `${UPLOADS_DIR}/${filename}`;
   await Deno.writeFile(filePath, fileBytes);
   return filename;
 }
 
-export async function getReceiptImageBytes(filename: string): Promise<Uint8Array | null> {
+/**
+ * Obtiene los bytes de la imagen desde Supabase Storage o desde disco local
+ */
+export async function getReceiptImageBytes(imagePathOrFilename: string): Promise<Uint8Array | null> {
   try {
-    const clean = filename.replace(/[^a-zA-Z0-9._-]/g, "");
+    // Si la ruta indica almacenamiento en Supabase Storage
+    if (imagePathOrFilename.startsWith(`supabase://${STORAGE_BUCKET}/`)) {
+      const relPath = imagePathOrFilename.replace(`supabase://${STORAGE_BUCKET}/`, "");
+      const { data, error } = await supabaseAdmin.storage
+        .from(STORAGE_BUCKET)
+        .download(relPath);
+
+      if (!error && data) {
+        const buffer = await data.arrayBuffer();
+        return new Uint8Array(buffer);
+      }
+    }
+
+    // Fallback a disco local
+    const clean = imagePathOrFilename.replace(/[^a-zA-Z0-9._-]/g, "");
     return await Deno.readFile(`${UPLOADS_DIR}/${clean}`);
   } catch {
     return null;
   }
+}
+
+/**
+ * Genera una URL firmada de lectura temporal para visualización segura en el visor
+ */
+export async function getReceiptSignedUrl(imagePathOrFilename: string, expiresInSeconds = 3600): Promise<string | null> {
+  if (imagePathOrFilename.startsWith(`supabase://${STORAGE_BUCKET}/`)) {
+    const relPath = imagePathOrFilename.replace(`supabase://${STORAGE_BUCKET}/`, "");
+    const { data, error } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(relPath, expiresInSeconds);
+
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+  }
+  return null;
 }
 
 export interface CreateReceiptInput {

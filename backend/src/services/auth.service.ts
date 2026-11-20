@@ -1,4 +1,6 @@
 import { sql } from "../config/db.ts";
+import { supabase } from "../config/supabase.ts";
+import { ENV } from "../config/env.ts";
 
 export interface UserSession {
   id: string;
@@ -40,8 +42,26 @@ export async function createJwtToken(payload: Record<string, unknown>, expiresIn
   return `${data}.${b64Sig}`;
 }
 
-// Verificar HMAC-SHA256 Token
+// Verificar Token (Soporta tokens nativos de Supabase Auth y tokens WebCrypto)
 export async function verifyJwtToken(token: string): Promise<Record<string, unknown> | null> {
+  // 1. Si Supabase está configurado, intentar validar contra Supabase Auth
+  if (ENV.SUPABASE_URL && !ENV.SUPABASE_URL.includes("placeholder")) {
+    try {
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) {
+        return {
+          sub: data.user.id,
+          email: data.user.email,
+          aud: data.user.aud,
+          role: data.user.role,
+        };
+      }
+    } catch {
+      // Continuar con verificación HMAC local
+    }
+  }
+
+  // 2. Verificación HMAC local
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
