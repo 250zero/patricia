@@ -107,6 +107,7 @@ export interface CreateReceiptInput {
   rnc?: string | null;
   ncf?: string | null;
   document_type: 1 | 2; // 1 = recibo, 2 = factura
+  category?: string;
   currency_code?: string;
   issue_date?: string;
   subtotal: number;
@@ -125,14 +126,36 @@ export interface CreateReceiptInput {
   }[];
 }
 
+export async function findDuplicateReceipt(
+  userId: string,
+  merchantName: string,
+  issueDate: string,
+  total: number
+) {
+  if (!merchantName || !total || total <= 0) return null;
+  const rows = await sql`
+    SELECT id, merchant_name, issue_date, total, created_at
+    FROM receipts
+    WHERE user_id = ${userId}
+      AND LOWER(TRIM(merchant_name)) = LOWER(TRIM(${merchantName}))
+      AND issue_date = ${issueDate}
+      AND ABS(total - ${total}) < 0.05
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  return rows.length > 0 ? rows[0] : null;
+}
+
 export async function createReceipt(input: CreateReceiptInput, userId: string) {
   const isBalanced = Math.abs(input.subtotal + input.itbis - input.total) < 0.05;
   const status = input.status || 1; // Por defecto draft
+  const category = (input.category || "otros").toLowerCase().trim();
 
   const inserted = await sql`
     INSERT INTO receipts (
       user_id,
       document_type,
+      category,
       merchant_name,
       rnc,
       ncf,
@@ -147,6 +170,7 @@ export async function createReceipt(input: CreateReceiptInput, userId: string) {
     ) VALUES (
       ${userId},
       ${input.document_type},
+      ${category},
       ${input.merchant_name},
       ${input.rnc || null},
       ${input.ncf || null},
@@ -195,7 +219,17 @@ export async function createReceipt(input: CreateReceiptInput, userId: string) {
   return { ...receipt, is_balanced: isBalanced };
 }
 
-export async function getReceipts(user: UserSession, filters?: { status?: number; document_type?: number; search?: string }) {
+export async function getReceipts(
+  user: UserSession,
+  filters?: {
+    status?: number;
+    document_type?: number;
+    category?: string;
+    search?: string;
+    from_date?: string;
+    to_date?: string;
+  }
+) {
   const isStaff = user.activeRole.id === 2 || user.activeRole.id === 3; // Contador o Super Admin
 
   const baseQuery = sql`
@@ -214,6 +248,9 @@ export async function getReceipts(user: UserSession, filters?: { status?: number
     ${isStaff ? sql`` : sql`AND r.user_id = ${user.id}`}
     ${filters?.status ? sql`AND r.status = ${filters.status}` : sql``}
     ${filters?.document_type ? sql`AND r.document_type = ${filters.document_type}` : sql``}
+    ${filters?.category ? sql`AND r.category = ${filters.category}` : sql``}
+    ${filters?.from_date ? sql`AND r.issue_date >= ${filters.from_date}` : sql``}
+    ${filters?.to_date ? sql`AND r.issue_date <= ${filters.to_date}` : sql``}
     ${filters?.search ? sql`AND (r.merchant_name ILIKE ${'%' + filters.search + '%'} OR r.rnc ILIKE ${'%' + filters.search + '%'} OR r.ncf ILIKE ${'%' + filters.search + '%'})` : sql``}
     ORDER BY r.created_at DESC
   `;
@@ -281,4 +318,94 @@ export async function submitReceipt(receiptId: string, userId: string) {
     RETURNING *
   `;
   return updated.length > 0 ? updated[0] : null;
+}
+
+export async function updateReceipt(
+  receiptId: string,
+  user: UserSession,
+  input: Partial<CreateReceiptInput>
+) {
+  const isSuperAdmin = user.activeRole.id === 3;
+  const rows = await sql`
+    SELECT * FROM receipts WHERE id = ${receiptId}
+  `;
+  if (!rows || rows.length === 0) {
+    return null;
+  }
+  const existing = rows[0];
+  if (!isSuperAdmin && existing.user_id !== user.id) {
+    throw new Error("No tiene permisos para modificar este comprobante.");
+  }
+  if (!isSuperAdmin && existing.status !== 1) {
+    throw new Error("Solo se pueden editar comprobantes que estén en estado Borrador.");
+  }
+
+  const nextDocType = input.document_type ?? existing.document_type;
+  const nextCategory = (input.category ?? existing.category ?? "otros").toLowerCase().trim();
+  const nextSubtotal = input.subtotal ?? Number(existing.subtotal);
+  const nextItbis = input.itbis ?? Number(existing.itbis);
+  const nextTotal = input.total ?? Number(existing.total);
+
+  const updated = await sql`
+    UPDATE receipts
+    SET
+      document_type = ${nextDocType},
+      category = ${nextCategory},
+      merchant_name = ${input.merchant_name ?? existing.merchant_name},
+      rnc = ${input.rnc !== undefined ? (input.rnc || null) : existing.rnc},
+      ncf = ${input.ncf !== undefined ? (input.ncf || null) : existing.ncf},
+      currency_code = ${input.currency_code ?? existing.currency_code},
+      issue_date = ${input.issue_date ?? existing.issue_date},
+      subtotal = ${nextSubtotal},
+      itbis = ${nextItbis},
+      total = ${nextTotal},
+      updated_at = NOW()
+    WHERE id = ${receiptId}
+    RETURNING *
+  `;
+
+  return updated.length > 0 ? updated[0] : null;
+}
+
+export async function deleteReceiptImage(imagePathOrFilename?: string | null) {
+  if (!imagePathOrFilename) return;
+  try {
+    if (imagePathOrFilename.startsWith(`supabase://${STORAGE_BUCKET}/`)) {
+      const relPath = imagePathOrFilename.replace(`supabase://${STORAGE_BUCKET}/`, "");
+      await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([relPath]);
+      return;
+    }
+    const clean = imagePathOrFilename.replace(/[^a-zA-Z0-9._-]/g, "");
+    if (clean) {
+      await Deno.remove(`${UPLOADS_DIR}/${clean}`).catch(() => {});
+    }
+  } catch (err) {
+    console.warn("⚠️ No se pudo eliminar la imagen física del comprobante:", err);
+  }
+}
+
+export async function deleteReceipt(receiptId: string, user: UserSession) {
+  const isSuperAdmin = user.activeRole.id === 3;
+  const rows = await sql`
+    SELECT * FROM receipts WHERE id = ${receiptId}
+  `;
+  if (!rows || rows.length === 0) {
+    return null;
+  }
+  const existing = rows[0];
+  if (!isSuperAdmin && existing.user_id !== user.id) {
+    throw new Error("No tiene permisos para eliminar este comprobante.");
+  }
+  if (!isSuperAdmin && existing.status !== 1) {
+    throw new Error("Solo se pueden eliminar comprobantes en estado Borrador.");
+  }
+
+  await deleteReceiptImage(existing.image_path);
+
+  const deleted = await sql`
+    DELETE FROM receipts
+    WHERE id = ${receiptId}
+    RETURNING id
+  `;
+  return deleted.length > 0 ? deleted[0] : null;
 }

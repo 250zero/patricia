@@ -10,6 +10,7 @@ export interface ReviewReceiptInput {
 export async function getAccountingInbox(filters?: {
   status?: number;
   document_type?: number;
+  category?: string;
   search?: string;
   from_date?: string;
   to_date?: string;
@@ -18,6 +19,7 @@ export async function getAccountingInbox(filters?: {
     SELECT 
       r.id,
       r.document_type,
+      r.category,
       r.merchant_name,
       r.rnc,
       r.ncf,
@@ -42,6 +44,7 @@ export async function getAccountingInbox(filters?: {
     WHERE 1=1
     ${filters?.status ? sql`AND r.status = ${filters.status}` : sql`AND r.status IN (2, 3, 4)`}
     ${filters?.document_type ? sql`AND r.document_type = ${filters.document_type}` : sql``}
+    ${filters?.category ? sql`AND r.category = ${filters.category}` : sql``}
     ${filters?.search ? sql`AND (r.merchant_name ILIKE ${'%' + filters.search + '%'} OR r.rnc ILIKE ${'%' + filters.search + '%'} OR r.ncf ILIKE ${'%' + filters.search + '%'})` : sql``}
     ${filters?.from_date ? sql`AND r.issue_date >= ${filters.from_date}` : sql``}
     ${filters?.to_date ? sql`AND r.issue_date <= ${filters.to_date}` : sql``}
@@ -134,12 +137,14 @@ export async function exportAccountingCsv(filters?: {
   from_date?: string;
   to_date?: string;
   document_type?: number;
+  category?: string;
   status?: number;
 }): Promise<string> {
   const records = await sql`
     SELECT 
       r.issue_date,
       CASE WHEN r.document_type = 2 THEN 'Factura' ELSE 'Recibo' END as tipo_documento,
+      COALESCE(r.category, 'otros') as categoria,
       r.merchant_name,
       COALESCE(r.rnc, 'N/A') as rnc,
       COALESCE(r.ncf, 'N/A') as ncf,
@@ -163,6 +168,7 @@ export async function exportAccountingCsv(filters?: {
     WHERE 1=1
     ${filters?.status ? sql`AND r.status = ${filters.status}` : sql``}
     ${filters?.document_type ? sql`AND r.document_type = ${filters.document_type}` : sql``}
+    ${filters?.category ? sql`AND r.category = ${filters.category}` : sql``}
     ${filters?.from_date ? sql`AND r.issue_date >= ${filters.from_date}` : sql``}
     ${filters?.to_date ? sql`AND r.issue_date <= ${filters.to_date}` : sql``}
     ORDER BY r.issue_date DESC, r.created_at DESC
@@ -172,6 +178,7 @@ export async function exportAccountingCsv(filters?: {
   const headers = [
     "Fecha Emision",
     "Tipo Comprobante",
+    "Categoria",
     "Comercio / Proveedor",
     "RNC",
     "NCF",
@@ -187,6 +194,7 @@ export async function exportAccountingCsv(filters?: {
   const rows = records.map((r: Record<string, unknown>) => [
     `"${r.issue_date}"`,
     `"${r.tipo_documento}"`,
+    `"${r.categoria}"`,
     `"${String(r.merchant_name).replace(/"/g, '""')}"`,
     `"${r.rnc}"`,
     `"${r.ncf}"`,

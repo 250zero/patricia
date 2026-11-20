@@ -17,7 +17,7 @@ const registerSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
   fullName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
-  roleId: z.number().int().optional().default(3), // Default: 3 = Empleado 1
+  roleId: z.number().int().optional().default(1), // Default seguro: 1 = Empleado
 });
 
 // POST /api/v1/auth/register (Supabase Auth Registro)
@@ -29,7 +29,9 @@ authRouter.post("/register", async (c: Context) => {
       return c.json({ error: "Datos de registro inválidos", details: parsed.error.errors }, 400);
     }
 
-    const { email, password, fullName, roleId } = parsed.data;
+    const { email, password, fullName } = parsed.data;
+    // El auto-registro público siempre inicia con rol Empleado (1)
+    const roleId = 1;
 
     // 1. Registro mediante Supabase Auth
     if (ENV.SUPABASE_URL && !ENV.SUPABASE_URL.includes("placeholder")) {
@@ -46,6 +48,37 @@ authRouter.post("/register", async (c: Context) => {
 
       if (supaErr) {
         return c.json({ error: supaErr.message }, 400);
+      }
+
+      const userId = supaAuth.user?.id;
+      let accessToken = supaAuth.session?.access_token;
+
+      // Si Supabase está auto-confirmado por trigger pero signUp no retornó sesión, iniciar sesión inmediatamente
+      if (!accessToken && userId) {
+        const { data: loginData } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        accessToken = loginData?.session?.access_token;
+      }
+
+      if (userId) {
+        const profile = await getUserProfile(userId);
+        if (profile && accessToken) {
+          c.set("userId", profile.id);
+          return c.json({
+            message: "Usuario registrado con éxito en Supabase Auth",
+            token: accessToken,
+            user: {
+              id: profile.id,
+              email: profile.email,
+              fullName: profile.fullName,
+              roles: profile.roles,
+              activeRole: profile.activeRole,
+              permissions: profile.permissions,
+            },
+          }, 201);
+        }
       }
 
       return c.json({
@@ -66,9 +99,18 @@ authRouter.post("/register", async (c: Context) => {
       ON CONFLICT DO NOTHING
     `;
 
+    const profile = await getUserProfile(inserted.id);
+    const token = await createJwtToken({
+      sub: inserted.id,
+      email: inserted.email,
+      role: roleId,
+      name: inserted.full_name,
+    });
+
     return c.json({
       message: "Usuario registrado localmente",
-      user: inserted,
+      token,
+      user: profile,
     }, 201);
   } catch (err: unknown) {
     const error = err as Error;

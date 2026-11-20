@@ -27,6 +27,20 @@ export class AuthService {
     );
   }
 
+  register(fullName: string, email: string, password: string): Observable<{ token?: string; user?: UserProfile; message: string }> {
+    return this.api.post<{ token?: string; user?: UserProfile; message: string }>('auth/register', {
+      fullName,
+      email,
+      password,
+    }).pipe(
+      tap((res) => {
+        if (res.token && res.user) {
+          this.setSession(res.token, res.user);
+        }
+      })
+    );
+  }
+
   switchRole(roleId: number): Observable<{ token: string; activeRole: UserRole }> {
     return this.api.post<{ token: string; activeRole: UserRole }>('auth/switch-role', { roleId }).pipe(
       tap((res) => {

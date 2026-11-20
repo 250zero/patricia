@@ -1,10 +1,35 @@
 import { ENV } from "../config/env.ts";
 
+export type ReceiptCategory =
+  | "alimentos"
+  | "combustible"
+  | "transporte"
+  | "oficina"
+  | "servicios"
+  | "otros";
+
+const VALID_CATEGORIES: ReceiptCategory[] = [
+  "alimentos",
+  "combustible",
+  "transporte",
+  "oficina",
+  "servicios",
+  "otros",
+];
+
+function normalizeCategory(raw?: unknown): ReceiptCategory {
+  const val = String(raw || "").trim().toLowerCase();
+  return (VALID_CATEGORIES as string[]).includes(val)
+    ? (val as ReceiptCategory)
+    : "otros";
+}
+
 export interface ExtractedReceiptData {
   merchant_name: string;
   rnc: string | null;
   ncf: string | null;
   document_type: 1 | 2; // 1 = recibo, 2 = factura
+  category: ReceiptCategory;
   currency_code: string;
   issue_date: string;
   subtotal: number;
@@ -83,12 +108,19 @@ REGLAS FISCALES Y CLASIFICACIÓN (RD):
 2. 'merchant_name': Nombre comercial, razón social o persona que figura en el encabezado del comprobante.
 3. 'rnc': Número de Registro Nacional de Contribuyentes (normalmente 9 dígitos numéricos). Si es un recibo informal (document_type = 1) o no figura en el comprobante, usa null.
 4. 'ncf': Número de Comprobante Fiscal formal (ej: B0100000001, B0200000001, E310000000001). Si es un recibo informal (document_type = 1) o no figura, usa null.
-5. 'currency_code': 'DOP' (predeterminado), 'USD' o 'EUR'.
-6. 'issue_date': Formato 'YYYY-MM-DD'. Si no es legible en el comprobante, usa la fecha actual.
-7. 'subtotal': Importe monetario antes de impuestos. Si no es legible, usa 0.
-8. 'itbis': Impuesto a la Transferencia de Bienes Industrializados y Servicios (18% en RD o 0 si está exento o no aplica en recibo informal).
-9. 'total': Importe final pagado (debe coincidir con subtotal + itbis).
-10. 'items': Lista detallada de productos/servicios con cantidad, descripción, precio unitario e importes legibles.
+5. 'category': Categoría contable del gasto. DEBE ser exactamente una de estas 6 opciones en minúsculas:
+   - 'alimentos' (restaurantes, supermercados, comida, café, farmacia/consumibles)
+   - 'combustible' (gasolina, gasoil, estaciones de combustible)
+   - 'transporte' (uber, taxi, peajes, pasajes, mensajería)
+   - 'oficina' (papelería, equipos, ferretería, suministros)
+   - 'servicios' (telecomunicaciones, internet, electricidad, agua, software/tech, honorarios)
+   - 'otros' (cualquier otro gasto que no encaje en las anteriores)
+6. 'currency_code': 'DOP' (predeterminado), 'USD' o 'EUR'.
+7. 'issue_date': Formato 'YYYY-MM-DD'. Si no es legible en el comprobante, usa la fecha actual.
+8. 'subtotal': Importe monetario antes de impuestos. Si no es legible, usa 0.
+9. 'itbis': Impuesto a la Transferencia de Bienes Industrializados y Servicios (18% en RD o 0 si está exento o no aplica en recibo informal).
+10. 'total': Importe final pagado (debe coincidir con subtotal + itbis).
+11. 'items': Lista detallada de productos/servicios con cantidad, descripción, precio unitario e importes legibles.
 
 REGLAS DE CALIDAD VISUAL, IMÁGENES BORROSAS Y ANTI-ALUCINACIÓN:
 11. 'confidence_score': Evalúa rigurosamente la nitidez y certeza de los datos extraídos (0.0 a 1.0):
@@ -179,6 +211,7 @@ DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO.
         rnc: rawParsed.rnc ? String(rawParsed.rnc).trim() : null,
         ncf: rawParsed.ncf ? String(rawParsed.ncf).trim() : null,
         document_type: rawParsed.document_type === 2 ? 2 : 1,
+        category: normalizeCategory(rawParsed.category),
         currency_code: String(rawParsed.currency_code || "DOP").toUpperCase(),
         issue_date: String(rawParsed.issue_date || new Date().toISOString().substring(0, 10)),
         subtotal,

@@ -4,10 +4,14 @@ import { processReceiptWithGemini } from "../services/gemini.service.ts";
 import {
   saveReceiptImage,
   getReceiptImageBytes,
+  getReceiptSignedUrl,
+  findDuplicateReceipt,
   createReceipt,
   getReceipts,
   getReceiptById,
   submitReceipt,
+  updateReceipt,
+  deleteReceipt,
 } from "../services/receipts.service.ts";
 import type { UserSession } from "../services/auth.service.ts";
 
@@ -62,10 +66,22 @@ receiptsRouter.post("/process-image", async (c: Context) => {
 
     // Invocar OCR estructurado de Gemini con cascada de modelos
     const extractedData = await processReceiptWithGemini(base64, mimeType);
+    const signedUrl = await getReceiptSignedUrl(imagePath);
+    const duplicate = user
+      ? await findDuplicateReceipt(
+          user.id,
+          extractedData.merchant_name,
+          extractedData.issue_date,
+          extractedData.total
+        )
+      : null;
 
     return c.json({
       success: true,
       image_path: imagePath,
+      image_url: signedUrl,
+      is_duplicate: !!duplicate,
+      duplicate_id: duplicate?.id || null,
       extracted_data: extractedData,
     });
   } catch (err: unknown) {
@@ -83,7 +99,7 @@ receiptsRouter.post("/", async (c: Context) => {
     const user = c.get("user") as UserSession;
     const body = await c.req.json();
 
-    if (!body.merchant_name || !body.subtotal || !body.total) {
+    if (!body.merchant_name || body.subtotal === undefined || body.total === undefined) {
       return c.json({ error: "Faltan campos requeridos (comercio, subtotal o total)." }, 400);
     }
 
@@ -104,12 +120,18 @@ receiptsRouter.get("/", async (c: Context) => {
     const user = c.get("user") as UserSession;
     const statusParam = c.req.query("status");
     const docTypeParam = c.req.query("document_type");
+    const categoryParam = c.req.query("category");
     const searchParam = c.req.query("search");
+    const fromDateParam = c.req.query("from_date");
+    const toDateParam = c.req.query("to_date");
 
     const filters = {
       status: statusParam ? parseInt(statusParam, 10) : undefined,
       document_type: docTypeParam ? parseInt(docTypeParam, 10) : undefined,
+      category: categoryParam || undefined,
       search: searchParam || undefined,
+      from_date: fromDateParam || undefined,
+      to_date: toDateParam || undefined,
     };
 
     const receipts = await getReceipts(user, filters);
@@ -156,6 +178,51 @@ receiptsRouter.post("/:id/submit", async (c: Context) => {
   } catch (err: unknown) {
     console.error("Error al enviar comprobante a contabilidad:", err);
     return c.json({ error: "Error al enviar comprobante." }, 500);
+  }
+});
+
+// PUT /api/v1/receipts/:id — Actualizar comprobante en borrador
+receiptsRouter.put("/:id", async (c: Context) => {
+  try {
+    const user = c.get("user") as UserSession;
+    const id = c.req.param("id")!;
+    const body = await c.req.json();
+
+    const updated = await updateReceipt(id, user, body);
+    if (!updated) {
+      return c.json({ error: "Comprobante no encontrado." }, 404);
+    }
+
+    c.set("auditEntityId", id);
+    c.set("auditEntityType", "receipt");
+
+    return c.json({ success: true, receipt: updated });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const code = msg.includes("permisos") ? 403 : msg.includes("Borrador") ? 400 : 500;
+    return c.json({ error: msg }, code);
+  }
+});
+
+// DELETE /api/v1/receipts/:id — Eliminar comprobante en borrador y su imagen física
+receiptsRouter.delete("/:id", async (c: Context) => {
+  try {
+    const user = c.get("user") as UserSession;
+    const id = c.req.param("id")!;
+
+    const deleted = await deleteReceipt(id, user);
+    if (!deleted) {
+      return c.json({ error: "Comprobante no encontrado." }, 404);
+    }
+
+    c.set("auditEntityId", id);
+    c.set("auditEntityType", "receipt");
+
+    return c.json({ success: true, deletedId: deleted.id });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const code = msg.includes("permisos") ? 403 : msg.includes("Borrador") ? 400 : 500;
+    return c.json({ error: msg }, code);
   }
 });
 

@@ -1,11 +1,21 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AppIconComponent } from '../../shared/components/app-icon/app-icon.component';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { ModalComponent } from '../../shared/components/modal/modal.component';
-import type { Receipt } from '../../core/models/receipt.model';
+import { RECEIPT_CATEGORIES, type Receipt } from '../../core/models/receipt.model';
+
+const CATEGORY_LABELS: Record<string, string> = {
+  alimentos: 'Alimentos',
+  combustible: 'Combustible',
+  transporte: 'Transporte',
+  oficina: 'Oficina',
+  servicios: 'Servicios',
+  otros: 'Otros',
+};
 
 @Component({
   selector: 'app-accounting',
@@ -54,48 +64,86 @@ import type { Receipt } from '../../core/models/receipt.model';
         </div>
       </div>
 
-      <!-- Filtros -->
-      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        <button
-          (click)="filterStatus.set(0)"
-          [class.bg-emerald-600]="filterStatus() === 0"
-          [class.text-white]="filterStatus() === 0"
-          [class.bg-slate-900]="filterStatus() !== 0"
-          [class.text-slate-400]="filterStatus() !== 0"
-          class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
-        >
-          Todos
-        </button>
-        <button
-          (click)="filterStatus.set(2)"
-          [class.bg-blue-600]="filterStatus() === 2"
-          [class.text-white]="filterStatus() === 2"
-          [class.bg-slate-900]="filterStatus() !== 2"
-          [class.text-slate-400]="filterStatus() !== 2"
-          class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
-        >
-          Pendientes ({{ countPending() }})
-        </button>
-        <button
-          (click)="filterStatus.set(3)"
-          [class.bg-emerald-600]="filterStatus() === 3"
-          [class.text-white]="filterStatus() === 3"
-          [class.bg-slate-900]="filterStatus() !== 3"
-          [class.text-slate-400]="filterStatus() !== 3"
-          class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
-        >
-          Aprobados
-        </button>
-        <button
-          (click)="filterStatus.set(4)"
-          [class.bg-rose-600]="filterStatus() === 4"
-          [class.text-white]="filterStatus() === 4"
-          [class.bg-slate-900]="filterStatus() !== 4"
-          [class.text-slate-400]="filterStatus() !== 4"
-          class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
-        >
-          Rechazados
-        </button>
+      <!-- Filtros Combinables (RF-23) -->
+      <div class="bg-[#111827] border border-slate-800 rounded-2xl p-3 space-y-2.5">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <input
+            type="text"
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+            placeholder="Buscar comercio, RNC o NCF..."
+            class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-emerald-500"
+          />
+          <select
+            [ngModel]="filterCategory()"
+            (ngModelChange)="filterCategory.set($event)"
+            class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-emerald-500"
+          >
+            <option value="">Todas las categorías</option>
+            @for (cat of categories; track cat.value) {
+              <option [value]="cat.value">{{ cat.label }}</option>
+            }
+          </select>
+          <div class="grid grid-cols-2 gap-1.5">
+            <input
+              type="date"
+              [ngModel]="fromDate()"
+              (ngModelChange)="fromDate.set($event)"
+              title="Desde fecha"
+              class="px-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-200 focus:outline-none focus:border-emerald-500"
+            />
+            <input
+              type="date"
+              [ngModel]="toDate()"
+              (ngModelChange)="toDate.set($event)"
+              title="Hasta fecha"
+              class="px-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-200 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            (click)="filterStatus.set(0)"
+            [class.bg-emerald-600]="filterStatus() === 0"
+            [class.text-white]="filterStatus() === 0"
+            [class.bg-slate-900]="filterStatus() !== 0"
+            [class.text-slate-400]="filterStatus() !== 0"
+            class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
+          >
+            Todos
+          </button>
+          <button
+            (click)="filterStatus.set(2)"
+            [class.bg-blue-600]="filterStatus() === 2"
+            [class.text-white]="filterStatus() === 2"
+            [class.bg-slate-900]="filterStatus() !== 2"
+            [class.text-slate-400]="filterStatus() !== 2"
+            class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
+          >
+            Pendientes ({{ countPending() }})
+          </button>
+          <button
+            (click)="filterStatus.set(3)"
+            [class.bg-emerald-600]="filterStatus() === 3"
+            [class.text-white]="filterStatus() === 3"
+            [class.bg-slate-900]="filterStatus() !== 3"
+            [class.text-slate-400]="filterStatus() !== 3"
+            class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
+          >
+            Aprobados
+          </button>
+          <button
+            (click)="filterStatus.set(4)"
+            [class.bg-rose-600]="filterStatus() === 4"
+            [class.text-white]="filterStatus() === 4"
+            [class.bg-slate-900]="filterStatus() !== 4"
+            [class.text-slate-400]="filterStatus() !== 4"
+            class="px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-semibold whitespace-nowrap transition-all"
+          >
+            Rechazados
+          </button>
+        </div>
       </div>
 
       <!-- Listado de Comprobantes a Revisar -->
@@ -124,6 +172,9 @@ import type { Receipt } from '../../core/models/receipt.model';
                   </span>
 
                   <span class="text-xs text-slate-400 font-mono">{{ r.issue_date }}</span>
+                  <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-semibold text-slate-300 border border-slate-700">
+                    {{ getCategoryLabel(r.category) }}
+                  </span>
                 </div>
 
                 <span
@@ -237,8 +288,8 @@ import type { Receipt } from '../../core/models/receipt.model';
             <!-- 2. Detalle Fiscal Capturado -->
             <div class="grid grid-cols-2 gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 font-mono">
               <div>
-                <span class="text-slate-500 block">Tipo:</span>
-                <span class="font-bold text-white">{{ item.document_type === 2 ? 'Factura Fiscal' : 'Recibo' }}</span>
+                <span class="text-slate-500 block">Tipo / Categoría:</span>
+                <span class="font-bold text-white">{{ item.document_type === 2 ? 'Factura Fiscal' : 'Recibo' }} · {{ getCategoryLabel(item.category) }}</span>
               </div>
               <div>
                 <span class="text-slate-500 block">Emisor:</span>
@@ -361,11 +412,17 @@ import type { Receipt } from '../../core/models/receipt.model';
 })
 export class AccountingComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly http = inject(HttpClient);
   protected readonly auth = inject(AuthService);
 
+  readonly categories = RECEIPT_CATEGORIES;
   readonly inbox = signal<Receipt[]>([]);
   readonly loading = signal(true);
   readonly filterStatus = signal<number>(2); // Por revisar por defecto
+  readonly filterCategory = signal<string>('');
+  readonly searchQuery = signal<string>('');
+  readonly fromDate = signal<string>('');
+  readonly toDate = signal<string>('');
   readonly exporting = signal(false);
 
   readonly isModalOpen = signal(false);
@@ -377,6 +434,10 @@ export class AccountingComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadInbox();
+  }
+
+  getCategoryLabel(cat?: string | null): string {
+    return CATEGORY_LABELS[cat || 'otros'] || 'Otros';
   }
 
   loadInbox(): void {
@@ -391,10 +452,39 @@ export class AccountingComponent implements OnInit {
   }
 
   filteredInbox(): Receipt[] {
-    const list = this.inbox();
+    let list = this.inbox();
     const st = this.filterStatus();
-    if (st === 0) return list;
-    return list.filter((r) => r.status === st);
+    if (st !== 0) {
+      list = list.filter((r) => r.status === st);
+    }
+
+    const cat = this.filterCategory();
+    if (cat) {
+      list = list.filter((r) => (r.category || 'otros') === cat);
+    }
+
+    const q = this.searchQuery().trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (r) =>
+          (r.merchant_name || '').toLowerCase().includes(q) ||
+          (r.rnc || '').toLowerCase().includes(q) ||
+          (r.ncf || '').toLowerCase().includes(q) ||
+          (r.submitter_name || '').toLowerCase().includes(q)
+      );
+    }
+
+    const from = this.fromDate();
+    if (from) {
+      list = list.filter((r) => String(r.issue_date).substring(0, 10) >= from);
+    }
+
+    const to = this.toDate();
+    if (to) {
+      list = list.filter((r) => String(r.issue_date).substring(0, 10) <= to);
+    }
+
+    return list;
   }
 
   countPending(): number {
@@ -463,7 +553,26 @@ export class AccountingComponent implements OnInit {
 
   exportCsv(): void {
     this.exporting.set(true);
-    window.open('/api/v1/accounting/export', '_blank');
-    setTimeout(() => this.exporting.set(false), 1500);
+    let params = new HttpParams();
+    if (this.filterStatus() !== 0) params = params.set('status', String(this.filterStatus()));
+    if (this.filterCategory()) params = params.set('category', this.filterCategory());
+    if (this.fromDate()) params = params.set('from_date', this.fromDate());
+    if (this.toDate()) params = params.set('to_date', this.toDate());
+
+    this.http.get('/api/v1/accounting/export', { params, responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `patricia_libros_contables_${new Date().toISOString().substring(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.exporting.set(false);
+      },
+      error: (err) => {
+        this.exporting.set(false);
+        alert('Error al exportar CSV: ' + (err.error?.error || err.message));
+      },
+    });
   }
 }

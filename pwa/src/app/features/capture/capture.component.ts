@@ -1,17 +1,19 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEventType } from '@angular/common/http';
 import { AppIconComponent } from '../../shared/components/app-icon/app-icon.component';
 import { CurrencyInputComponent } from '../../shared/components/currency-input/currency-input.component';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { ApiService } from '../../core/services/api.service';
+import { RECEIPT_CATEGORIES, type ReceiptCategory } from '../../core/models/receipt.model';
 
 interface ExtractedData {
   merchant_name: string;
   rnc: string | null;
   ncf: string | null;
   document_type: 1 | 2; // 1 = recibo, 2 = factura
+  category?: ReceiptCategory;
   currency_code: string;
   issue_date: string;
   subtotal: number;
@@ -21,6 +23,15 @@ interface ExtractedData {
   items: { description: string; quantity: number; unit_price: number; subtotal: number; itbis: number; total: number }[];
   is_balanced: boolean;
   notes?: string;
+}
+
+interface ProcessImageResponse {
+  success: boolean;
+  image_path: string;
+  image_url?: string | null;
+  is_duplicate?: boolean;
+  duplicate_id?: string | null;
+  extracted_data: ExtractedData;
 }
 
 @Component({
@@ -81,14 +92,48 @@ interface ExtractedData {
             </div>
           }
 
-          <!-- Indicador de procesamiento IA -->
+          <!-- Indicador de Compresión, Progreso de Subida y Procesamiento IA -->
+          @if (compressionInfo()) {
+            <div class="mt-3 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+              <span>Optimización móvil (max 1600px)</span>
+              <span class="font-mono text-emerald-400">{{ compressionInfo() }}</span>
+            </div>
+          }
+
           @if (processing()) {
-            <div class="mt-4 p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-3 text-emerald-400">
-              <span class="w-5 h-5 border-2 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin"></span>
-              <div class="text-xs">
-                <p class="font-bold">Analizando con Gemini Flash IA...</p>
-                <p class="text-emerald-500/80">Extrayendo RNC, NCF, ITBIS 18% y desglose de artículos</p>
+            <div class="mt-3 p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 space-y-2 text-emerald-400">
+              <div class="flex items-center gap-3">
+                <span class="w-5 h-5 border-2 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin shrink-0"></span>
+                <div class="text-xs flex-1">
+                  <p class="font-bold">
+                    {{ uploadProgress() < 100 ? 'Subiendo comprobante a Supabase Storage...' : 'Analizando con Gemini Flash IA...' }}
+                  </p>
+                  <p class="text-emerald-500/80">Extrayendo RNC, NCF, categoría, ITBIS 18% y desglose</p>
+                </div>
+                <span class="text-xs font-mono font-bold">{{ uploadProgress() }}%</span>
               </div>
+              <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-200"
+                  [style.width.%]="uploadProgress()"
+                ></div>
+              </div>
+            </div>
+          }
+
+          @if (uploadError()) {
+            <div class="mt-3 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <app-icon name="shield-exclamation" size="sm" />
+                <span>{{ uploadError() }}</span>
+              </div>
+              <button
+                type="button"
+                (click)="retryUpload()"
+                class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold shrink-0"
+              >
+                Reintentar
+              </button>
             </div>
           }
         </div>
@@ -127,6 +172,19 @@ interface ExtractedData {
               </button>
             </div>
           </div>
+
+          <!-- Alerta de Posible Comprobante Duplicado (RF-20) -->
+          @if (isDuplicateWarning()) {
+            <div class="p-3.5 rounded-xl bg-orange-500/15 border border-orange-500/40 text-orange-300 text-xs space-y-1">
+              <div class="flex items-center gap-2 font-bold">
+                <app-icon name="shield-exclamation" size="sm" extraClass="text-orange-400" />
+                <span>Posible Comprobante Duplicado Detectado</span>
+              </div>
+              <p class="text-[11px] text-orange-200/90">
+                Ya existe un gasto registrado con el mismo comercio ({{ formMerchant }}), fecha ({{ formDate }}) y monto total. Verifica antes de confirmar.
+              </p>
+            </div>
+          }
 
           <!-- Alerta de Confianza / Imagen Borrosa -->
           @if (extracted() && ((extracted()!.confidence_score < 0.75) || extracted()!.notes)) {
@@ -208,6 +266,18 @@ interface ExtractedData {
             </div>
 
             <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">Categoría (Sugerida por IA)</label>
+              <select
+                [(ngModel)]="formCategory"
+                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-sm text-white focus:outline-none focus:border-emerald-500"
+              >
+                @for (cat of categories; track cat.value) {
+                  <option [value]="cat.value">{{ cat.label }}</option>
+                }
+              </select>
+            </div>
+
+            <div>
               <label class="block text-xs font-semibold text-slate-400 mb-1">Moneda</label>
               <select
                 [(ngModel)]="formCurrency"
@@ -277,13 +347,20 @@ export class CaptureComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
 
+  readonly categories = RECEIPT_CATEGORIES;
   readonly previewUrl = signal<string | null>(null);
   readonly processing = signal<boolean>(false);
+  readonly uploadProgress = signal<number>(0);
+  readonly compressionInfo = signal<string>('');
+  readonly uploadError = signal<string>('');
+  readonly isDuplicateWarning = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
   readonly extracted = signal<ExtractedData | null>(null);
 
+  private lastProcessedFile: File | null = null;
   savedImagePath: string | null = null;
   formDocumentType: 1 | 2 = 2; // Factura por defecto
+  formCategory: ReceiptCategory = 'otros';
   formMerchant = '';
   formRnc = '';
   formNcf = '';
@@ -319,40 +396,148 @@ export class CaptureComponent {
     this.formTotal = val;
   }
 
-  onFileSelected(event: Event): void {
+  async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
 
-    const file = input.files[0];
-    this.previewUrl.set(URL.createObjectURL(file));
+    const rawFile = input.files[0];
+    this.previewUrl.set(URL.createObjectURL(rawFile));
+    this.uploadError.set('');
+    this.isDuplicateWarning.set(false);
+
+    const { file: compressedFile, originalKb, compressedKb } = await this.compressImageClientSide(rawFile);
+    if (rawFile.type.startsWith('image/')) {
+      this.compressionInfo.set(`${originalKb} KB → ${compressedKb} KB`);
+    } else {
+      this.compressionInfo.set(`${originalKb} KB`);
+    }
+
+    this.lastProcessedFile = compressedFile;
+    this.uploadAndExtract(compressedFile);
+  }
+
+  retryUpload(): void {
+    if (this.lastProcessedFile) {
+      this.uploadAndExtract(this.lastProcessedFile);
+    }
+  }
+
+  private uploadAndExtract(file: File): void {
     this.processing.set(true);
+    this.uploadProgress.set(10);
+    this.uploadError.set('');
 
     const formData = new FormData();
     formData.append('file', file);
 
-    this.http.post<{ success: boolean; image_path: string; extracted_data: ExtractedData }>('/api/v1/receipts/process-image', formData).subscribe({
-      next: (res) => {
-        this.processing.set(false);
-        this.savedImagePath = res.image_path;
-        this.extracted.set(res.extracted_data);
+    this.http
+      .post<ProcessImageResponse>('/api/v1/receipts/process-image', formData, {
+        reportProgress: true,
+        observe: 'events',
+      })
+      .subscribe({
+        next: (event) => {
+          if (event.type === HttpEventType.UploadProgress && event.total) {
+            const pct = Math.min(95, Math.round((100 * event.loaded) / event.total));
+            this.uploadProgress.set(pct);
+          } else if (event.type === HttpEventType.Response && event.body) {
+            this.uploadProgress.set(100);
+            this.processing.set(false);
+            const res = event.body;
+            this.savedImagePath = res.image_path;
+            this.isDuplicateWarning.set(!!res.is_duplicate);
+            this.extracted.set(res.extracted_data);
 
-        // Prellenar formulario
-        const d = res.extracted_data;
-        this.formDocumentType = d.document_type;
-        this.formMerchant = d.merchant_name;
-        this.formRnc = d.rnc || '';
-        this.formNcf = d.ncf || '';
-        this.formDate = d.issue_date || this.formDate;
-        this.formCurrency = d.currency_code || 'DOP';
-        this.formSubtotal = d.subtotal;
-        this.formItbis = d.itbis;
-        this.formTotal = d.total;
-      },
-      error: (err) => {
-        this.processing.set(false);
-        alert('Error al procesar comprobante con IA: ' + (err.error?.error || err.message));
-      },
-    });
+            const d = res.extracted_data;
+            this.formDocumentType = d.document_type;
+            this.formCategory = d.category || 'otros';
+            this.formMerchant = d.merchant_name;
+            this.formRnc = d.rnc || '';
+            this.formNcf = d.ncf || '';
+            this.formDate = d.issue_date || this.formDate;
+            this.formCurrency = d.currency_code || 'DOP';
+            this.formSubtotal = d.subtotal;
+            this.formItbis = d.itbis;
+            this.formTotal = d.total;
+          }
+        },
+        error: (err) => {
+          this.processing.set(false);
+          this.uploadProgress.set(0);
+          this.uploadError.set(err.error?.error || err.message || 'No se pudo procesar el comprobante.');
+        },
+      });
+  }
+
+  // RF-07: Reducir a max 1600 px por lado y comprimir < 1.5 MB en el navegador
+  private async compressImageClientSide(
+    file: File
+  ): Promise<{ file: File; originalKb: number; compressedKb: number }> {
+    const originalKb = Math.max(1, Math.round(file.size / 1024));
+    if (!file.type.startsWith('image/')) {
+      return { file, originalKb, compressedKb: originalKb };
+    }
+
+    try {
+      const imgUrl = URL.createObjectURL(file);
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = imgUrl;
+      });
+      URL.revokeObjectURL(imgUrl);
+
+      const maxDim = 1600;
+      let width = img.naturalWidth || img.width;
+      let height = img.naturalHeight || img.height;
+
+      if (width > maxDim || height > maxDim) {
+        if (width >= height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return { file, originalKb, compressedKb: originalKb };
+      }
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let quality = 0.82;
+      let blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+      );
+
+      // Si aun supera 1.4 MB, bajar calidad a 0.65
+      if (blob && blob.size > 1.4 * 1024 * 1024) {
+        quality = 0.65;
+        blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+        );
+      }
+
+      if (!blob) {
+        return { file, originalKb, compressedKb: originalKb };
+      }
+
+      const baseName = file.name.replace(/\.[^.]+$/, '') || 'comprobante';
+      const compressedFile = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+      const compressedKb = Math.max(1, Math.round(compressedFile.size / 1024));
+      return { file: compressedFile, originalKb, compressedKb };
+    } catch {
+      return { file, originalKb, compressedKb: originalKb };
+    }
   }
 
   saveReceipt(targetStatus: 1 | 2): void {
@@ -362,6 +547,7 @@ export class CaptureComponent {
       rnc: this.formRnc || null,
       ncf: this.formNcf || null,
       document_type: this.formDocumentType,
+      category: this.formCategory,
       currency_code: this.formCurrency,
       issue_date: this.formDate,
       subtotal: this.formSubtotal,

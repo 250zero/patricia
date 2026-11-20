@@ -1,5 +1,22 @@
 export type DocumentType = 1 | 2; // 1 = Recibo, 2 = Factura
 export type ReceiptStatus = 1 | 2 | 3 | 4; // 1 = Borrador, 2 = Enviado, 3 = Aprobado, 4 = Rechazado
+export type ReceiptCategory =
+  | 'alimentos'
+  | 'combustible'
+  | 'transporte'
+  | 'oficina'
+  | 'servicios'
+  | 'otros';
+
+export const RECEIPT_CATEGORIES: { value: ReceiptCategory; label: string }[] = [
+  { value: 'alimentos', label: 'Alimentos' },
+  { value: 'combustible', label: 'Combustible' },
+  { value: 'transporte', label: 'Transporte' },
+  { value: 'oficina', label: 'Oficina' },
+  { value: 'servicios', label: 'Servicios' },
+  { value: 'otros', label: 'Otros' },
+];
+
 export type ReceiptListItem = Receipt;
 
 export interface ReceiptItem {
@@ -33,6 +50,7 @@ export interface Receipt {
   submitter_email?: string;
   reviewer_name?: string;
   document_type: DocumentType;
+  category?: ReceiptCategory | string;
   merchant_name: string;
   rnc: string | null;
   ncf: string | null;

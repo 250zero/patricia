@@ -18,6 +18,7 @@ accountingRouter.get("/inbox", async (c: Context) => {
   try {
     const status = c.req.query("status") ? parseInt(c.req.query("status")!, 10) : undefined;
     const documentType = c.req.query("document_type") ? parseInt(c.req.query("document_type")!, 10) : undefined;
+    const category = c.req.query("category");
     const search = c.req.query("search");
     const fromDate = c.req.query("from_date");
     const toDate = c.req.query("to_date");
@@ -25,6 +26,7 @@ accountingRouter.get("/inbox", async (c: Context) => {
     const receipts = await getAccountingInbox({
       status,
       document_type: documentType,
+      category,
       search,
       from_date: fromDate,
       to_date: toDate,
@@ -93,12 +95,14 @@ accountingRouter.get("/export", async (c: Context) => {
     const fromDate = c.req.query("from_date");
     const toDate = c.req.query("to_date");
     const documentType = c.req.query("document_type") ? parseInt(c.req.query("document_type")!, 10) : undefined;
+    const category = c.req.query("category");
     const status = c.req.query("status") ? parseInt(c.req.query("status")!, 10) : undefined;
 
     const csvData = await exportAccountingCsv({
       from_date: fromDate,
       to_date: toDate,
       document_type: documentType,
+      category,
       status,
     });
 
