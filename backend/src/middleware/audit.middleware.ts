@@ -35,11 +35,17 @@ export const auditMiddleware = (): MiddlewareHandler => {
     const userAgent = rawUa.length > 500 ? rawUa.substring(0, 500) : rawUa;
 
     let reqBody: unknown = null;
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    const contentType = c.req.header("content-type") || "";
+    // Solo intentar parsear JSON si el Content-Type es estrictamente application/json
+    // Esto previene consumir prematuramente el stream multipart/form-data y corromper archivos binarios
+    if (
+      ["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
+      contentType.includes("application/json")
+    ) {
       try {
         reqBody = sanitizePayload(await c.req.json());
       } catch {
-        // Ignorar cuerpos multipart o no JSON
+        // Ignorar cuerpos no conformes con JSON
       }
     }
 

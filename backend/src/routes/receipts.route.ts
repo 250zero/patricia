@@ -16,6 +16,25 @@ export const receiptsRouter = new Hono();
 // Todos los endpoints de recibos requieren usuario autenticado
 receiptsRouter.use("*", authMiddleware());
 
+// Deteccion robusta de tipo MIME real por firma de cabecera binaria (Magic Bytes)
+function detectImageMimeType(bytes: Uint8Array, fallbackType: string): string {
+  if (bytes.length >= 4) {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+      return "image/png";
+    }
+    if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+      return "image/jpeg";
+    }
+    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+      return "image/webp";
+    }
+    if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+      return "application/pdf";
+    }
+  }
+  return fallbackType || "image/jpeg";
+}
+
 // POST /api/v1/receipts/process-image — Procesamiento de imagen con Gemini Flash OCR
 receiptsRouter.post("/process-image", async (c: Context) => {
   try {
@@ -30,22 +49,16 @@ receiptsRouter.post("/process-image", async (c: Context) => {
       return c.json({ error: "El archivo excede el tamaño máximo permitido de 10 MB." }, 400);
     }
 
-    const mimeType = file.type || "image/jpeg";
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
+    const mimeType = detectImageMimeType(bytes, file.type);
 
     const user = c.get("user") as UserSession | undefined;
-    const ext = file.name.split(".").pop() || "jpg";
+    const ext = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "application/pdf" ? "pdf" : "jpg";
     const imagePath = await saveReceiptImage(bytes, ext, user?.id);
 
-    // Convertir a Base64 de forma eficiente y segura para fotos grandes
-    let binary = "";
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    const base64 = btoa(binary);
+    // Conversion a Base64 nativa y de alto rendimiento sin corrupcion de caracteres binarios
+    const base64 = Buffer.from(bytes).toString("base64");
 
     // Invocar OCR estructurado de Gemini con cascada de modelos
     const extractedData = await processReceiptWithGemini(base64, mimeType);

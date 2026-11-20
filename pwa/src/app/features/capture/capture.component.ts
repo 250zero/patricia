@@ -165,21 +165,35 @@ interface ExtractedData {
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-400 mb-1">RNC (9 dígitos)</label>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">
+                <span>RNC</span>
+                @if (formDocumentType === 1) {
+                  <span class="text-[10px] text-slate-500 font-normal ml-1">(Opcional en recibo informal)</span>
+                } @else {
+                  <span class="text-[10px] text-slate-400 font-normal ml-1">(9 dígitos)</span>
+                }
+              </label>
               <input
                 type="text"
                 [(ngModel)]="formRnc"
-                placeholder="101010101"
+                [placeholder]="formDocumentType === 1 ? 'Opcional / No aplica' : '101010101'"
                 class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-400 mb-1">NCF / e-CF</label>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">
+                <span>NCF / Comprobante</span>
+                @if (formDocumentType === 1) {
+                  <span class="text-[10px] text-slate-500 font-normal ml-1">(Opcional en recibo informal)</span>
+                } @else {
+                  <span class="text-[10px] text-slate-400 font-normal ml-1">(B01.. / E31..)</span>
+                }
+              </label>
               <input
                 type="text"
                 [(ngModel)]="formNcf"
-                placeholder="B0100000001"
+                [placeholder]="formDocumentType === 1 ? 'Opcional / No aplica' : 'B0100000001'"
                 class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
               />
             </div>

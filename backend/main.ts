@@ -66,6 +66,4 @@ app.get("/", (c: Context) => {
   });
 });
 
-console.log(`🚀 Patricia Backend iniciado en http://0.0.0.0:${ENV.PORT}`);
-
 Deno.serve({ port: ENV.PORT }, app.fetch);

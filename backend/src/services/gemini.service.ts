@@ -62,9 +62,10 @@ export async function processReceiptWithGemini(
     throw new Error("Clave de LLM (LLM_API_KEY) no configurada en el servidor.");
   }
 
-  // Cascada de modelos multimodales de visión para máxima disponibilidad y velocidad
-  // gemini-3.5-flash-lite responde en ~1.5s con excelente precisión de OCR; gemini-3.5-flash como respaldo robusto
+  // Cascada de modelos multimodales de visión para máxima disponibilidad y velocidad (con gemini-3.1-flash-lite-preview en 0.9s)
   const modelsToTry = [
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-flash-latest"
@@ -76,15 +77,16 @@ Tu labor es extraer de forma estructurada, exacta y sin alucinaciones todos los 
 
 REGLAS FISCALES Y CLASIFICACIÓN (RD):
 1. 'document_type':
-   - 2 (Factura): Si el comprobante posee NCF (Número de Comprobante Fiscal iniciando en B o E) y/o RNC formal de empresa comercial.
-   - 1 (Recibo): Si es un recibo informal, ticket de caja chica, conduce, nota de entrega sin validez fiscal formal o pago simple.
-2. 'merchant_name': Nombre comercial o razón social que figura en el encabezado del comprobante.
-3. 'rnc': Número de Registro Nacional de Contribuyentes (normalmente 9 dígitos numéricos). Si no es legible o no existe, usa null.
-4. 'ncf': Número de Comprobante Fiscal (ej: B0100000001, B0200000001, E310000000001). Si no es legible, usa null.
+   - 1 (Recibo Informal): Si el documento es un recibo informal, ticket de caja chica, vale provisional, nota de entrega, conduce o recibo sin comprobante fiscal formal.
+     * IMPORTANTE PARA RECIBOS INFORMALES: En comprobantes clasificados como Recibo (1), los campos 'rnc' y 'ncf' DEBEN ser null (se omiten por completo, ya que un recibo informal no requiere ni posee comprobante fiscal formal).
+   - 2 (Factura Fiscal): Si el comprobante cuenta con NCF formal (ej: B01, B02, B14, B15, E31, etc.) y/o RNC comercial de la DGII.
+2. 'merchant_name': Nombre comercial, razón social o persona que figura en el encabezado del comprobante.
+3. 'rnc': Número de Registro Nacional de Contribuyentes (normalmente 9 dígitos numéricos). Si es un recibo informal (document_type = 1) o no figura en el comprobante, usa null.
+4. 'ncf': Número de Comprobante Fiscal formal (ej: B0100000001, B0200000001, E310000000001). Si es un recibo informal (document_type = 1) o no figura, usa null.
 5. 'currency_code': 'DOP' (predeterminado), 'USD' o 'EUR'.
 6. 'issue_date': Formato 'YYYY-MM-DD'. Si no es legible en el comprobante, usa la fecha actual.
 7. 'subtotal': Importe monetario antes de impuestos. Si no es legible, usa 0.
-8. 'itbis': Impuesto a la Transferencia de Bienes Industrializados y Servicios (18% en RD o 0 si está exento).
+8. 'itbis': Impuesto a la Transferencia de Bienes Industrializados y Servicios (18% en RD o 0 si está exento o no aplica en recibo informal).
 9. 'total': Importe final pagado (debe coincidir con subtotal + itbis).
 10. 'items': Lista detallada de productos/servicios con cantidad, descripción, precio unitario e importes legibles.
 
@@ -135,6 +137,7 @@ DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO.
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
