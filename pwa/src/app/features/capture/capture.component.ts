@@ -17,6 +17,7 @@ interface ExtractedData {
   subtotal: number;
   itbis: number;
   total: number;
+  confidence_score: number;
   items: { description: string; quantity: number; unit_price: number; subtotal: number; itbis: number; total: number }[];
   is_balanced: boolean;
   notes?: string;
@@ -126,6 +127,19 @@ interface ExtractedData {
               </button>
             </div>
           </div>
+
+          <!-- Alerta de Confianza / Imagen Borrosa -->
+          @if (extracted() && ((extracted()!.confidence_score < 0.75) || extracted()!.notes)) {
+            <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs space-y-1">
+              <div class="flex items-center gap-2 font-bold">
+                <app-icon name="shield-exclamation" size="sm" extraClass="text-amber-400" />
+                <span>Calidad Visual: {{ (extracted()!.confidence_score * 100).toFixed(0) }}% de certeza</span>
+              </div>
+              <p class="text-[11px] text-amber-200/90 leading-relaxed">
+                {{ extracted()!.notes || 'La imagen presenta zonas borrosas, sombras o falta de nitidez. Por favor verifique y complete los campos antes de guardar.' }}
+              </p>
+            </div>
+          }
 
           <!-- Banner Reactivo de Cuadre Aritmetico -->
           @if (isBalanced()) {

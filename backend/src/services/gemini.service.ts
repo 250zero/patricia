@@ -62,8 +62,8 @@ export async function processReceiptWithGemini(
     throw new Error("Clave de LLM (LLM_API_KEY) no configurada en el servidor.");
   }
 
-  // Modelos compatibles con multimodal vision
-  const model = "gemini-2.0-flash";
+  // Modelo de vision multimodal Gemini 3 Flash
+  const model = "gemini-3.8-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const systemInstruction = `
@@ -74,15 +74,25 @@ REGLAS FISCALES Y CLASIFICACIÓN (RD):
 1. 'document_type':
    - 2 (Factura): Si el comprobante posee NCF (Número de Comprobante Fiscal iniciando en B o E) y/o RNC formal de empresa comercial.
    - 1 (Recibo): Si es un recibo informal, ticket de caja chica, conduce, nota de entrega sin validez fiscal formal o pago simple.
-2. 'rnc': Número de Registro Nacional de Contribuyentes (normalmente 9 dígitos).
-3. 'ncf': Número de Comprobante Fiscal (ej: B0100000001, B0200000001, E310000000001).
+2. 'rnc': Número de Registro Nacional de Contribuyentes (normalmente 9 dígitos). Si no es legible o no existe, usa null.
+3. 'ncf': Número de Comprobante Fiscal (ej: B0100000001, B0200000001, E310000000001). Si no es legible, usa null.
 4. 'currency_code': 'DOP' (predeterminado), 'USD' o 'EUR'.
-5. 'issue_date': Formato 'YYYY-MM-DD'. Si el año no es claro, usa el año actual.
-6. 'subtotal': Importe antes de impuestos.
+5. 'issue_date': Formato 'YYYY-MM-DD'. Si no es legible, usa la fecha actual.
+6. 'subtotal': Importe antes de impuestos. Si no es legible, usa 0.
 7. 'itbis': Impuesto a la Transferencia de Bienes Industrializados y Servicios (18% en RD o 0 si está exento).
-8. 'total': Importe final pagado (debe coincidir exactamente con subtotal + itbis).
-9. 'items': Lista detallada de productos/servicios con cantidad, precio unitario e importes.
-10. 'confidence_score': Calidad visual y certeza de los datos extraídos (0.0 a 1.0).
+8. 'total': Importe final pagado (debe coincidir con subtotal + itbis).
+9. 'items': Lista detallada de productos/servicios con cantidad, precio unitario e importes legibles.
+
+REGLAS DE CALIDAD VISUAL, IMÁGENES BORROSAS Y ANTI-ALUCINACIÓN:
+10. 'confidence_score': Evalúa rigurosamente la nitidez y certeza de los datos extraídos (0.0 a 1.0):
+    - Si la imagen es NÍTIDA y completamente legible: asigna entre 0.85 y 1.0.
+    - Si la imagen es BORROSA, desenfocada, movida, con baja resolución, sombras o texto borroso: asigna un valor ENTRE 0.30 y 0.65.
+    - Si la imagen NO es un recibo ni factura: asigna MENOS de 0.30.
+11. 'notes': Explica el estado de la imagen.
+    - Si la imagen es borrosa: 'Imagen borrosa / ilegible: los textos o importes presentan falta de nitidez; se requiere confirmación manual.'
+    - Si no es un recibo: 'La imagen no corresponde a un comprobante de gasto ni factura.'
+    - Si es nítida: null.
+12. CERO ALUCINACIONES: Si un monto o campo no es nítido debido al desenfoque, NO inventes cifras; devuélvelo como 0 o null.
 
 DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO.
 `;

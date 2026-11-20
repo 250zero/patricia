@@ -7,7 +7,7 @@ Type=simple
 User=root
 WorkingDirectory=/var/www/patricia.vis7ar.com/backend
 EnvironmentFile=/var/www/patricia.vis7ar.com/backend/.env
-ExecStart=/root/.deno/bin/deno run --allow-net --allow-env --allow-read main.ts
+ExecStart=/root/.deno/bin/deno run --allow-net --allow-env --allow-read --allow-write main.ts
 Restart=always
 RestartSec=3
 Environment=PORT=3002
