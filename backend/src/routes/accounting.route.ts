@@ -66,7 +66,10 @@ accountingRouter.post("/:id/review", async (c: Context) => {
 });
 
 // POST /api/v1/accounting/:id/comments — Anotar comentario contable visible en Gastos
-accountingRouter.post("/:id/comments", async (c: Context) => {
+accountingRouter.post("/:id/comments", handleAddComment);
+accountingRouter.post("/:id/comment", handleAddComment);
+
+async function handleAddComment(c: Context) {
   try {
     const user = c.get("user") as UserSession;
     const id = c.req.param("id")!;
@@ -82,7 +85,7 @@ accountingRouter.post("/:id/comments", async (c: Context) => {
     console.error("Error al registrar comentario contable:", err);
     return c.json({ error: "Error al guardar comentario contable." }, 500);
   }
-});
+}
 
 // GET /api/v1/accounting/export — Exportación a CSV con UTF-8 BOM
 accountingRouter.get("/export", async (c: Context) => {
