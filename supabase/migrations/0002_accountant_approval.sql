@@ -13,11 +13,19 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- Habilitar RLS en tablas transaccionales
+-- Habilitar RLS en tablas transaccionales (el backend como servicio de aplicacion gobierna con BYPASSRLS)
 ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receipt_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receipt_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receipt_audit_logs ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+   IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'patricia_user') THEN
+      ALTER ROLE patricia_user BYPASSRLS;
+   END IF;
+END
+$$;
 
 -- 1. Politicas para Receipts
 -- Los usuarios regulares ven sus propios recibos; Contadores y Super Admins ven todos
