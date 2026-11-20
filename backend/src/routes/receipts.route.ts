@@ -34,19 +34,20 @@ receiptsRouter.post("/process-image", async (c: Context) => {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
 
-    // Guardar imagen localmente en el servidor
+    const user = c.get("user") as UserSession | undefined;
     const ext = file.name.split(".").pop() || "jpg";
-    const imagePath = await saveReceiptImage(bytes, ext);
+    const imagePath = await saveReceiptImage(bytes, ext, user?.id);
 
-    // Convertir a Base64 para Gemini Vision API
+    // Convertir a Base64 de forma eficiente y segura para fotos grandes
     let binary = "";
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
     }
     const base64 = btoa(binary);
 
-    // Invocar OCR estructurado de Gemini
+    // Invocar OCR estructurado de Gemini con cascada de modelos
     const extractedData = await processReceiptWithGemini(base64, mimeType);
 
     return c.json({
