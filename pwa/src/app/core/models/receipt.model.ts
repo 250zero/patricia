@@ -43,6 +43,7 @@ export interface Receipt {
   total: number;
   status: ReceiptStatus;
   image_path: string | null;
+  image_url?: string | null;
   items_count?: number;
   comments_count?: number;
   latest_accounting_note?: string | null;

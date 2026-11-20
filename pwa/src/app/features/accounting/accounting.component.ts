@@ -221,12 +221,12 @@ import type { Receipt } from '../../core/models/receipt.model';
               </div>
 
               <div class="w-full max-h-64 overflow-auto flex items-center justify-center p-2">
-                @if (item.image_path) {
+                @if (item.image_url || item.image_path) {
                   <img
-                    [src]="'/api/v1/receipts/' + item.id + '/image'"
+                    [src]="item.image_url || ('/api/v1/receipts/' + item.id + '/image')"
                     alt="Visor"
                     [style.transform]="'rotate(' + rotation() + 'deg) scale(' + zoom() + ')'"
-                    class="max-h-56 object-contain transition-transform duration-200"
+                    class="max-h-56 object-contain transition-transform duration-200 rounded-lg shadow"
                   />
                 } @else {
                   <div class="py-10 text-slate-500">Sin imagen adjunta</div>
@@ -279,36 +279,79 @@ import type { Receipt } from '../../core/models/receipt.model';
 
             <!-- 4. Area de Comentarios Contables (Requerimiento CS-01) -->
             <div class="space-y-2">
-              <label class="block text-xs font-bold text-slate-300">
-                Comentarios / Observaciones Contables:
-              </label>
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-bold text-slate-300">
+                  Comentarios / Observaciones Contables:
+                </label>
+                @if (item.status === 3 || item.status === 4) {
+                  <span class="text-[10px] text-slate-400 font-semibold px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+                    Dictamen Finalizado (Solo Lectura)
+                  </span>
+                }
+              </div>
               <textarea
                 [(ngModel)]="reviewComment"
+                [readOnly]="item.status === 3 || item.status === 4"
+                [disabled]="item.status === 3 || item.status === 4"
                 rows="2"
-                placeholder="Escribe un comentario (será visible directamente en los Gastos del empleado)..."
-                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-emerald-500"
+                [placeholder]="item.status === 3 || item.status === 4 ? 'Sin observaciones registradas.' : 'Escribe un comentario (será visible directamente en los Gastos del empleado)...'"
+                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-emerald-500 disabled:opacity-80 disabled:bg-slate-950"
               ></textarea>
             </div>
 
-            <!-- 5. Botones de Dictamen Contable -->
-            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                (click)="dictaminar('reject')"
-                [disabled]="reviewing() || isSodBlocked(item)"
-                class="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all disabled:opacity-40"
-              >
-                Rechazar
-              </button>
+            <!-- 5. Botones de Dictamen Contable / Estado Finalizado -->
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+              @if (item.status === 3) {
+                <div class="flex items-center gap-2 text-emerald-400 font-bold text-xs bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
+                  <app-icon name="check" size="sm" />
+                  <span>Comprobante Aprobado</span>
+                  @if (item.reviewer_name) {
+                    <span class="text-slate-400 font-normal">por {{ item.reviewer_name }}</span>
+                  }
+                </div>
+                <button
+                  type="button"
+                  (click)="isModalOpen.set(false)"
+                  class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all ml-auto"
+                >
+                  Cerrar
+                </button>
+              } @else if (item.status === 4) {
+                <div class="flex items-center gap-2 text-rose-400 font-bold text-xs bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-xl">
+                  <app-icon name="shield-exclamation" size="sm" />
+                  <span>Comprobante Rechazado</span>
+                  @if (item.reviewer_name) {
+                    <span class="text-slate-400 font-normal">por {{ item.reviewer_name }}</span>
+                  }
+                </div>
+                <button
+                  type="button"
+                  (click)="isModalOpen.set(false)"
+                  class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all ml-auto"
+                >
+                  Cerrar
+                </button>
+              } @else {
+                <div class="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    (click)="dictaminar('reject')"
+                    [disabled]="reviewing() || isSodBlocked(item)"
+                    class="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Rechazar
+                  </button>
 
-              <button
-                type="button"
-                (click)="dictaminar('approve')"
-                [disabled]="reviewing() || isSodBlocked(item)"
-                class="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40"
-              >
-                {{ reviewing() ? 'Procesando...' : 'Aprobar Comprobante' }}
-              </button>
+                  <button
+                    type="button"
+                    (click)="dictaminar('approve')"
+                    [disabled]="reviewing() || isSodBlocked(item)"
+                    class="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40"
+                  >
+                    {{ reviewing() ? 'Procesando...' : 'Aprobar Comprobante' }}
+                  </button>
+                </div>
+              }
             </div>
           </div>
         }
@@ -381,7 +424,7 @@ export class AccountingComponent implements OnInit {
     this.activeReceipt.set(r);
     this.zoom.set(1);
     this.rotation.set(0);
-    this.reviewComment = '';
+    this.reviewComment = r.latest_accounting_note || (r as any).notes || '';
     this.isModalOpen.set(true);
   }
 

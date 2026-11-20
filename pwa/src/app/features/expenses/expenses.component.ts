@@ -194,10 +194,10 @@ import type { Receipt } from '../../core/models/receipt.model';
         @if (selectedReceipt(); as item) {
           <div class="space-y-4 text-xs">
             <!-- Imagen si existe -->
-            @if (item.image_path) {
+            @if (item.image_url || item.image_path) {
               <div class="rounded-xl overflow-hidden border border-slate-800 bg-black max-h-56 flex items-center justify-center">
                 <img
-                  [src]="'/api/v1/receipts/' + item.id + '/image'"
+                  [src]="item.image_url || ('/api/v1/receipts/' + item.id + '/image')"
                   alt="Recibo"
                   class="max-h-56 object-contain"
                 />

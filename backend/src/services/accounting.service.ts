@@ -1,4 +1,5 @@
 import { sql } from "../config/db.ts";
+import { getReceiptSignedUrl } from "./receipts.service.ts";
 import type { UserSession } from "./auth.service.ts";
 
 export interface ReviewReceiptInput {
@@ -47,7 +48,13 @@ export async function getAccountingInbox(filters?: {
     ORDER BY r.created_at DESC
   `;
 
-  return await query;
+  const rows = await query;
+  return await Promise.all(
+    rows.map(async (r: any) => ({
+      ...r,
+      image_url: r.image_path ? await getReceiptSignedUrl(r.image_path) : null,
+    }))
+  );
 }
 
 export async function reviewReceipt(receiptId: string, reviewer: UserSession, input: ReviewReceiptInput) {

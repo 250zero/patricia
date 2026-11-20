@@ -79,7 +79,11 @@ export async function getReceiptImageBytes(imagePathOrFilename: string): Promise
 /**
  * Genera una URL firmada de lectura temporal para visualización segura en el visor
  */
-export async function getReceiptSignedUrl(imagePathOrFilename: string, expiresInSeconds = 3600): Promise<string | null> {
+export async function getReceiptSignedUrl(imagePathOrFilename?: string | null, expiresInSeconds = 86400): Promise<string | null> {
+  if (!imagePathOrFilename) return null;
+  if (imagePathOrFilename.startsWith("http://") || imagePathOrFilename.startsWith("https://")) {
+    return imagePathOrFilename;
+  }
   if (imagePathOrFilename.startsWith(`supabase://${STORAGE_BUCKET}/`)) {
     const relPath = imagePathOrFilename.replace(`supabase://${STORAGE_BUCKET}/`, "");
     const { data, error } = await supabaseAdmin.storage
@@ -88,6 +92,11 @@ export async function getReceiptSignedUrl(imagePathOrFilename: string, expiresIn
 
     if (!error && data?.signedUrl) {
       return data.signedUrl;
+    }
+    // Fallback a URL publica si createSignedUrl da error
+    const pub = supabaseAdmin.storage.from(STORAGE_BUCKET).getPublicUrl(relPath);
+    if (pub?.data?.publicUrl) {
+      return pub.data.publicUrl;
     }
   }
   return null;
@@ -209,7 +218,13 @@ export async function getReceipts(user: UserSession, filters?: { status?: number
     ORDER BY r.created_at DESC
   `;
 
-  return await baseQuery;
+  const rows = await baseQuery;
+  return await Promise.all(
+    rows.map(async (r: any) => ({
+      ...r,
+      image_url: r.image_path ? await getReceiptSignedUrl(r.image_path) : null,
+    }))
+  );
 }
 
 export async function getReceiptById(receiptId: string, user: UserSession) {
@@ -247,9 +262,11 @@ export async function getReceiptById(receiptId: string, user: UserSession) {
   `;
 
   const isBalanced = Math.abs(Number(receipt.subtotal) + Number(receipt.itbis) - Number(receipt.total)) < 0.05;
+  const imageUrl = receipt.image_path ? await getReceiptSignedUrl(receipt.image_path) : null;
 
   return {
     ...receipt,
+    image_url: imageUrl,
     items,
     comments,
     is_balanced: isBalanced,

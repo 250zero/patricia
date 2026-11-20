@@ -170,15 +170,23 @@ receiptsRouter.get("/:id/image", async (c: Context) => {
       return c.json({ error: "Imagen no disponible para este comprobante." }, 404);
     }
 
-    const bytes = await getReceiptImageBytes((receipt as any).image_path);
+    const imagePath = (receipt as any).image_path;
+    // Si la imagen está en Supabase Storage, redirigir directamente a la URL firmada / CDN
+    const signedUrl = await getReceiptSignedUrl(imagePath);
+    if (signedUrl) {
+      return c.redirect(signedUrl, 302);
+    }
+
+    const bytes = await getReceiptImageBytes(imagePath);
     if (!bytes) {
       return c.json({ error: "Archivo de imagen no encontrado en almacenamiento." }, 404);
     }
 
+    const mimeType = detectImageMimeType(bytes, "image/jpeg");
     return new Response(bytes as any, {
       headers: {
-        "Content-Type": "image/jpeg",
-        "Cache-Control": "private, max-age=86400",
+        "Content-Type": mimeType,
+        "Cache-Control": "public, max-age=86400",
       },
     });
   } catch (err: unknown) {
